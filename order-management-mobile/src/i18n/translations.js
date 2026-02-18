@@ -111,8 +111,10 @@ export const translations = {
     statusPago: 'Pago',
     statusCancelado: 'Cancelado',
 
-    // Language
+    // Settings
     language: 'Idioma',
+    settings: 'Configurações',
+    profile: 'Perfil',
   },
 
   'en-US': {
@@ -218,6 +220,8 @@ export const translations = {
     statusCancelado: 'Canceled',
 
     language: 'Language',
+    settings: 'Settings',
+    profile: 'Profile',
   },
 
   'es-ES': {
@@ -323,5 +327,7 @@ export const translations = {
     statusCancelado: 'Cancelado',
 
     language: 'Idioma',
+    settings: 'Configuración',
+    profile: 'Perfil',
   },
 };

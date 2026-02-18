@@ -6,9 +6,9 @@ const I18nContext = createContext(null);
 
 const STORAGE_KEY = 'app_language';
 const AVAILABLE_LANGUAGES = [
-  { code: 'pt-BR', label: '🇧🇷 Português' },
-  { code: 'en-US', label: '🇺🇸 English' },
-  { code: 'es-ES', label: '🇪🇸 Español' },
+  { code: 'pt-BR', label: '🇧🇷 Português', short: 'PT' },
+  { code: 'en-US', label: '🇺🇸 English', short: 'US' },
+  { code: 'es-ES', label: '🇪🇸 Español', short: 'ES' },
 ];
 
 export function I18nProvider({ children }) {

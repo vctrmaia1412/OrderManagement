@@ -29,6 +29,7 @@ function SidebarLayout({ navigation }) {
   const { t, locale, changeLanguage, languages } = useI18n();
   const [activeScreen, setActiveScreen] = useState('Pedidos');
   const [pendingCount, setPendingCount] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const role = user?.role || 'User';
 
   const menuItems = [
@@ -85,27 +86,49 @@ function SidebarLayout({ navigation }) {
         </View>
 
         <View style={styles.sidebarFooter}>
-          <View style={styles.langSection}>
-            <Text style={styles.langTitle}>🌐 {t('language')}</Text>
-            <View style={styles.langRow}>
-              {languages.map(lang => (
-                <TouchableOpacity
-                  key={lang.code}
-                  style={[styles.langBtn, locale === lang.code && styles.langBtnActive]}
-                  onPress={() => changeLanguage(lang.code)}
-                >
-                  <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>
-                    {lang.label.split(' ')[0]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-            <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutText}>{t('logout')}</Text>
+          <TouchableOpacity style={styles.settingsToggle} onPress={() => setSettingsOpen(!settingsOpen)}>
+            <Text style={styles.settingsIcon}>⚙️</Text>
+            <Text style={styles.settingsLabel}>{t('settings')}</Text>
+            <Text style={styles.settingsArrow}>{settingsOpen ? '▲' : '▼'}</Text>
           </TouchableOpacity>
+
+          {settingsOpen && (
+            <View style={styles.settingsPanel}>
+              <View style={styles.settingsItem}>
+                <Text style={styles.settingsItemIcon}>👤</Text>
+                <View style={styles.settingsItemContent}>
+                  <Text style={styles.settingsItemLabel}>{t('profile')}</Text>
+                  <Text style={styles.settingsItemValue}>{user?.fullName || user?.username}</Text>
+                  <Text style={styles.settingsItemSub}>{isAdmin ? t('administrator') : t('user')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.settingsItem}>
+                <Text style={styles.settingsItemIcon}>🌐</Text>
+                <View style={styles.settingsItemContent}>
+                  <Text style={styles.settingsItemLabel}>{t('language')}</Text>
+                  <View style={styles.langRow}>
+                    {languages.map(lang => (
+                      <TouchableOpacity
+                        key={lang.code}
+                        style={[styles.langBtn, locale === lang.code && styles.langBtnActive]}
+                        onPress={() => changeLanguage(lang.code)}
+                      >
+                        <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>
+                          {lang.short}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+                <Text style={styles.logoutIcon}>🚪</Text>
+                <Text style={styles.logoutText}>{t('logout')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
@@ -241,23 +264,75 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#312e81',
   },
-  langSection: {
+  settingsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    cursor: 'pointer',
   },
-  langTitle: {
+  settingsIcon: {
+    fontSize: 16,
+    marginRight: 12,
+  },
+  settingsLabel: {
     color: '#a5b4fc',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+    flex: 1,
+  },
+  settingsArrow: {
+    color: '#6366f1',
+    fontSize: 10,
+  },
+  settingsPanel: {
+    backgroundColor: '#252262',
+    marginHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#312e81',
+  },
+  settingsItemIcon: {
+    fontSize: 14,
+    marginRight: 10,
+    marginTop: 2,
+  },
+  settingsItemContent: {
+    flex: 1,
+  },
+  settingsItemLabel: {
+    color: '#a5b4fc',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  settingsItemValue: {
+    color: '#e0e7ff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  settingsItemSub: {
+    color: '#818cf8',
+    fontSize: 11,
+    marginTop: 2,
   },
   langRow: {
     flexDirection: 'row',
     gap: 6,
+    marginTop: 4,
   },
   langBtn: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
@@ -267,8 +342,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#4338ca',
   },
   langText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#a5b4fc',
+    fontWeight: '500',
   },
   langTextActive: {
     color: '#fff',
@@ -276,12 +352,12 @@ const styles = StyleSheet.create({
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
-    paddingTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   logoutIcon: {
-    fontSize: 16,
-    marginRight: 12,
+    fontSize: 14,
+    marginRight: 10,
   },
   logoutText: {
     color: '#f87171',
