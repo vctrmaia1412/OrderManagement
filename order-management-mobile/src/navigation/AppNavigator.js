@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { orderService } from '../services/api';
 
 import LoginScreen from '../screens/LoginScreen';
 import OrdersScreen from '../screens/OrdersScreen';
@@ -33,7 +34,21 @@ const screens = {
 function SidebarLayout({ navigation }) {
   const { user, isAdmin, logout } = useAuth();
   const [activeScreen, setActiveScreen] = useState('Pedidos');
+  const [pendingCount, setPendingCount] = useState(0);
   const role = user?.role || 'User';
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchCount = async () => {
+      try {
+        const { data } = await orderService.getPending();
+        setPendingCount(data.length);
+      } catch {}
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 10000);
+    return () => clearInterval(interval);
+  }, [isAdmin, activeScreen]);
 
   const visibleItems = menuItems.filter(item => item.roles.includes(role));
   const ActiveComponent = screens[activeScreen] || OrdersScreen;
@@ -60,8 +75,8 @@ function SidebarLayout({ navigation }) {
               <Text style={[styles.menuLabel, activeScreen === item.key && styles.menuLabelActive]}>
                 {item.label}
               </Text>
-              {item.key === 'Fila' && (
-                <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>!</Text></View>
+              {item.key === 'Fila' && pendingCount > 0 && (
+                <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>{pendingCount}</Text></View>
               )}
             </TouchableOpacity>
           ))}
