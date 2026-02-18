@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { orderService, customerService, paymentConditionService } from '../services/api';
+import { useI18n } from '../context/I18nContext';
 
 export default function CreateOrderScreen({ navigation }) {
   const [customers, setCustomers] = useState([]);
@@ -11,6 +12,7 @@ export default function CreateOrderScreen({ navigation }) {
   const [customerId, setCustomerId] = useState('');
   const [conditionId, setConditionId] = useState('');
   const [items, setItems] = useState([{ productName: '', quantity: '1', unitPrice: '' }]);
+  const { t } = useI18n();
 
   useEffect(() => {
     const load = async () => {
@@ -29,9 +31,18 @@ export default function CreateOrderScreen({ navigation }) {
   const total = items.reduce((s, it) => s + (parseInt(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0), 0);
   const fmt = (v) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
+  const showError = (title, msg) => {
+    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+    else Alert.alert(title, msg);
+  };
+  const showSuccess = (title, msg) => {
+    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+    else Alert.alert(title, msg);
+  };
+
   const handleSubmit = async () => {
-    if (!customerId || !conditionId) { Alert.alert('Erro', 'Selecione cliente e condição.'); return; }
-    if (items.some(i => !i.productName || !i.quantity || !i.unitPrice)) { Alert.alert('Erro', 'Preencha todos os itens.'); return; }
+    if (!customerId || !conditionId) { showError(t('error'), t('selectCustomerError')); return; }
+    if (items.some(i => !i.productName || !i.quantity || !i.unitPrice)) { showError(t('error'), t('fillItemsError')); return; }
     try {
       setSubmitting(true);
       const payload = {
@@ -39,9 +50,9 @@ export default function CreateOrderScreen({ navigation }) {
         items: items.map(i => ({ productName: i.productName, quantity: parseInt(i.quantity), unitPrice: parseFloat(i.unitPrice) })),
       };
       const { data } = await orderService.create(payload);
-      Alert.alert('Sucesso', `Pedido #${data.orderId} criado!`);
+      showSuccess(t('success'), `${t('orderTitle')} #${data.orderId} ${t('orderCreated')}`);
       navigation.navigate('Pedidos');
-    } catch (e) { Alert.alert('Erro', e.response?.data?.message || 'Erro ao criar.'); } finally { setSubmitting(false); }
+    } catch (e) { showError(t('error'), e.response?.data?.message || t('createError')); } finally { setSubmitting(false); }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
@@ -49,18 +60,18 @@ export default function CreateOrderScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>DADOS DO PEDIDO</Text>
-        <Text style={styles.label}>Cliente</Text>
+        <Text style={styles.sectionTitle}>{t('orderDataSection')}</Text>
+        <Text style={styles.label}>{t('selectCustomer')}</Text>
         <View style={styles.pickerWrap}>
           <Picker selectedValue={customerId} onValueChange={setCustomerId} style={styles.picker}>
-            <Picker.Item label="Selecione..." value="" />
+            <Picker.Item label={t('select')} value="" />
             {customers.map(c => <Picker.Item key={c.customerId} label={c.name} value={String(c.customerId)} />)}
           </Picker>
         </View>
-        <Text style={styles.label}>Cond. Pagamento</Text>
+        <Text style={styles.label}>{t('selectPayment')}</Text>
         <View style={styles.pickerWrap}>
           <Picker selectedValue={conditionId} onValueChange={setConditionId} style={styles.picker}>
-            <Picker.Item label="Selecione..." value="" />
+            <Picker.Item label={t('select')} value="" />
             {conditions.map(p => <Picker.Item key={p.paymentConditionId} label={p.description} value={String(p.paymentConditionId)} />)}
           </Picker>
         </View>
@@ -68,15 +79,15 @@ export default function CreateOrderScreen({ navigation }) {
 
       <View style={styles.section}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.sectionTitle}>ITENS</Text>
-          <TouchableOpacity onPress={addItem}><Text style={{ color: '#4338ca', fontWeight: '600' }}>+ Item</Text></TouchableOpacity>
+          <Text style={styles.sectionTitle}>{t('itemsSection')}</Text>
+          <TouchableOpacity onPress={addItem}><Text style={{ color: '#4338ca', fontWeight: '600' }}>{t('addItem')}</Text></TouchableOpacity>
         </View>
         {items.map((item, i) => (
           <View key={i} style={styles.itemForm}>
-            <TextInput style={[styles.input, { marginBottom: 6 }]} placeholder="Produto" value={item.productName} onChangeText={v => updateItem(i, 'productName', v)} />
+            <TextInput style={[styles.input, { marginBottom: 6 }]} placeholder={t('product')} value={item.productName} onChangeText={v => updateItem(i, 'productName', v)} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Qtd" value={item.quantity} onChangeText={v => updateItem(i, 'quantity', v)} keyboardType="numeric" />
-              <TextInput style={[styles.input, { flex: 2 }]} placeholder="Preço unit." value={item.unitPrice} onChangeText={v => updateItem(i, 'unitPrice', v)} keyboardType="decimal-pad" />
+              <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('quantity')} value={item.quantity} onChangeText={v => updateItem(i, 'quantity', v)} keyboardType="numeric" />
+              <TextInput style={[styles.input, { flex: 2 }]} placeholder={t('unitPrice')} value={item.unitPrice} onChangeText={v => updateItem(i, 'unitPrice', v)} keyboardType="decimal-pad" />
               {items.length > 1 && <TouchableOpacity onPress={() => removeItem(i)} style={styles.removeBtn}><Text style={{ color: '#dc2626' }}>✕</Text></TouchableOpacity>}
             </View>
           </View>
@@ -84,13 +95,13 @@ export default function CreateOrderScreen({ navigation }) {
       </View>
 
       <View style={styles.totalSection}>
-        <Text style={styles.totalLabel}>Total:</Text>
+        <Text style={styles.totalLabel}>{t('totalLabel')}</Text>
         <Text style={styles.totalValue}>{fmt(total)}</Text>
       </View>
-      {total > 5000 && <Text style={styles.approvalWarn}>Requer aprovação manual (&gt; R$ 5.000)</Text>}
+      {total > 5000 && <Text style={styles.approvalWarn}>{t('requiresApproval')}</Text>}
 
       <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={submitting}>
-        <Text style={styles.submitText}>{submitting ? 'Criando...' : 'Criar Pedido'}</Text>
+        <Text style={styles.submitText}>{submitting ? t('creating') : t('createOrder')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

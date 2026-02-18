@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../context/I18nContext';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -8,46 +9,47 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { t, locale, changeLanguage, languages } = useI18n();
 
   const handleLogin = async () => {
     setError('');
-    if (!username || !password) {
-      setError('Preencha todos os campos.');
-      return;
-    }
+    if (!username || !password) { setError(t('loginFillAll')); return; }
     try {
       setLoading(true);
       await login(username, password);
     } catch (err) {
-      if (err.response) {
-        setError(err.response.data?.message || 'Usuário ou senha inválidos.');
-      } else {
-        setError('Não foi possível conectar ao servidor. Verifique se a API está rodando.');
-      }
-    } finally {
-      setLoading(false);
-    }
+      if (err.response) setError(err.response.data?.message || t('loginInvalid'));
+      else setError(t('loginNoServer'));
+    } finally { setLoading(false); }
   };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Order Management</Text>
-        <Text style={styles.subtitle}>Faça login para continuar</Text>
+        <Text style={styles.title}>{t('appTitle')}</Text>
+        <Text style={styles.subtitle}>{t('loginTitle')}</Text>
 
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
-        <Text style={styles.label}>Usuário</Text>
+        <Text style={styles.label}>{t('loginUser')}</Text>
         <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholder="admin" autoCapitalize="none" />
 
-        <Text style={styles.label}>Senha</Text>
+        <Text style={styles.label}>{t('loginPassword')}</Text>
         <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••" secureTextEntry />
 
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Entrar</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{t('loginButton')}</Text>}
         </TouchableOpacity>
 
-        <Text style={styles.hint}>admin/admin123 | joao/joao123 | maria/maria123</Text>
+        <Text style={styles.hint}>{t('loginHint')}</Text>
+
+        <View style={styles.langRow}>
+          {languages.map(lang => (
+            <TouchableOpacity key={lang.code} style={[styles.langBtn, locale === lang.code && styles.langBtnActive]} onPress={() => changeLanguage(lang.code)}>
+              <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>{lang.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -65,4 +67,9 @@ const styles = StyleSheet.create({
   errorBox: { backgroundColor: '#fef2f2', padding: 10, borderRadius: 8, marginBottom: 4 },
   errorText: { color: '#dc2626', fontSize: 13 },
   hint: { fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 16 },
+  langRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, gap: 6 },
+  langBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  langBtnActive: { backgroundColor: '#4338ca', borderColor: '#4338ca' },
+  langText: { fontSize: 12, color: '#6b7280' },
+  langTextActive: { color: '#fff', fontWeight: '600' },
 });

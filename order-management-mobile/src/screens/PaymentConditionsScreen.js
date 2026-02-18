@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { paymentConditionService } from '../services/api';
+import { useI18n } from '../context/I18nContext';
 
 export default function PaymentConditionsScreen() {
   const [conditions, setConditions] = useState([]);
@@ -10,13 +11,20 @@ export default function PaymentConditionsScreen() {
   const [description, setDescription] = useState('');
   const [installments, setInstallments] = useState('1');
   const [submitting, setSubmitting] = useState(false);
+  const { t } = useI18n();
 
-  const fetch = async () => { try { const { data } = await paymentConditionService.getAll(); setConditions(data); } catch {} finally { setLoading(false); } };
-  useFocusEffect(useCallback(() => { fetch(); }, []));
+  const fetchConditions = async () => { try { const { data } = await paymentConditionService.getAll(); setConditions(data); } catch {} finally { setLoading(false); } };
+  useFocusEffect(useCallback(() => { fetchConditions(); }, []));
+
+  const showError = (title, msg) => {
+    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+    else Alert.alert(title, msg);
+  };
 
   const handleCreate = async () => {
-    if (!description) { Alert.alert('Erro', 'Preencha a descrição.'); return; }
-    try { setSubmitting(true); await paymentConditionService.create({ description, numberOfInstallments: parseInt(installments) }); setDescription(''); setInstallments('1'); setShowForm(false); fetch(); } catch { Alert.alert('Erro', 'Erro ao criar.'); } finally { setSubmitting(false); }
+    if (!description) { showError(t('error'), t('fillDescription')); return; }
+    try { setSubmitting(true); await paymentConditionService.create({ description, numberOfInstallments: parseInt(installments) }); setDescription(''); setInstallments('1'); setShowForm(false); fetchConditions(); }
+    catch { showError(t('error'), t('createError')); } finally { setSubmitting(false); }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
@@ -24,14 +32,14 @@ export default function PaymentConditionsScreen() {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(!showForm)}>
-        <Text style={styles.addText}>{showForm ? 'Cancelar' : '+ Nova Condição'}</Text>
+        <Text style={styles.addText}>{showForm ? t('cancel') : t('newCondition')}</Text>
       </TouchableOpacity>
       {showForm && (
         <View style={styles.form}>
-          <TextInput style={styles.input} placeholder="Descrição (ex: 30/60/90)" value={description} onChangeText={setDescription} />
-          <TextInput style={styles.input} placeholder="Nº Parcelas" value={installments} onChangeText={setInstallments} keyboardType="numeric" />
+          <TextInput style={styles.input} placeholder={t('condDescription')} value={description} onChangeText={setDescription} />
+          <TextInput style={styles.input} placeholder={t('condInstallments')} value={installments} onChangeText={setInstallments} keyboardType="numeric" />
           <TouchableOpacity style={styles.saveBtn} onPress={handleCreate} disabled={submitting}>
-            <Text style={styles.saveText}>{submitting ? 'Salvando...' : 'Salvar'}</Text>
+            <Text style={styles.saveText}>{submitting ? t('saving') : t('save')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -41,10 +49,10 @@ export default function PaymentConditionsScreen() {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>#{item.paymentConditionId} - {item.description}</Text>
-            <Text style={styles.cardSub}>{item.numberOfInstallments}x parcela(s)</Text>
+            <Text style={styles.cardSub}>{item.numberOfInstallments}x {t('condInstallmentsSuffix')}</Text>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhuma condição cadastrada.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{t('noConditions')}</Text>}
       />
     </View>
   );

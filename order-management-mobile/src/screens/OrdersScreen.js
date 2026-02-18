@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { orderService } from '../services/api';
+import { useI18n } from '../context/I18nContext';
 
 const statusColors = {
   Criado: '#e5e7eb', AguardandoAprovacao: '#fef3c7', Aprovado: '#dbeafe',
@@ -10,41 +11,29 @@ const statusTextColors = {
   Criado: '#374151', AguardandoAprovacao: '#92400e', Aprovado: '#1d4ed8',
   Processando: '#6d28d9', Pago: '#065f46', Cancelado: '#991b1b',
 };
-const statusLabels = {
-  Criado: 'Criado', AguardandoAprovacao: 'Aguard. Aprov.', Aprovado: 'Aprovado',
-  Processando: 'Processando', Pago: 'Pago', Cancelado: 'Cancelado',
-};
 
 export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(null);
+  const { t, statusLabel } = useI18n();
 
   const fetchOrders = async () => {
-    try {
-      const { data } = await orderService.getAll();
-      setOrders(data);
-    } catch {} finally {
-      setLoading(false);
-    }
+    try { const { data } = await orderService.getAll(); setOrders(data); } catch {} finally { setLoading(false); }
   };
 
   useEffect(() => { fetchOrders(); }, []);
 
   const handleApprove = async (e, orderId) => {
-    if (e && e.stopPropagation) e.stopPropagation();
-    if (Platform.OS === 'web') {
-      if (!window.confirm(`Deseja aprovar o pedido #${orderId}?`)) return;
-    }
+    if (e?.stopPropagation) e.stopPropagation();
+    if (Platform.OS === 'web' && !window.confirm(`${t('confirmApprove')} #${orderId}?`)) return;
     try {
       setApproving(orderId);
       await orderService.approve(orderId);
       await fetchOrders();
     } catch {
-      if (Platform.OS === 'web') window.alert('Não foi possível aprovar o pedido.');
-    } finally {
-      setApproving(null);
-    }
+      if (Platform.OS === 'web') window.alert(t('approveError'));
+    } finally { setApproving(null); }
   };
 
   const fmt = (v) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -55,26 +44,20 @@ export default function OrdersScreen({ navigation }) {
         <Text style={styles.orderId}>#{item.orderId}</Text>
         <View style={[styles.badge, { backgroundColor: statusColors[item.status] || '#e5e7eb' }]}>
           <Text style={[styles.badgeText, { color: statusTextColors[item.status] || '#374151' }]}>
-            {statusLabels[item.status] || item.status}
+            {statusLabel(item.status)}
           </Text>
         </View>
       </View>
       <Text style={styles.customer}>{item.customerName}</Text>
-      <Text style={styles.condition}>{item.paymentConditionDescription} • por {item.createdBy}</Text>
+      <Text style={styles.condition}>{item.paymentConditionDescription} • {t('by')} {item.createdBy}</Text>
       <View style={styles.cardFooter}>
         <Text style={styles.total}>{fmt(item.totalAmount)}</Text>
         {item.requiresManualApproval && item.status === 'Criado' ? (
-          <Pressable
-            style={[styles.approveBtn, approving === item.orderId && styles.approveBtnDisabled]}
-            onPress={(e) => handleApprove(e, item.orderId)}
-            disabled={approving === item.orderId}
-          >
-            <Text style={styles.approveBtnText}>
-              {approving === item.orderId ? 'Aprovando...' : 'Aprovar'}
-            </Text>
+          <Pressable style={[styles.approveBtn, approving === item.orderId && styles.approveBtnDisabled]} onPress={(e) => handleApprove(e, item.orderId)} disabled={approving === item.orderId}>
+            <Text style={styles.approveBtnText}>{approving === item.orderId ? t('approving') : t('approveBtn')}</Text>
           </Pressable>
         ) : item.requiresManualApproval ? (
-          <Text style={styles.approvalTag}>Aprov. Manual</Text>
+          <Text style={styles.approvalTag}>{t('manualApproval')}</Text>
         ) : null}
       </View>
     </Pressable>
@@ -86,15 +69,11 @@ export default function OrdersScreen({ navigation }) {
     <View style={{ flex: 1 }}>
       <View style={styles.toolbar}>
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchOrders}>
-          <Text style={styles.refreshText}>🔄 Atualizar</Text>
+          <Text style={styles.refreshText}>{t('refresh')}</Text>
         </TouchableOpacity>
       </View>
-      <FlatList
-        data={orders}
-        keyExtractor={(item) => String(item.orderId)}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={<View style={styles.center}><Text style={styles.empty}>Nenhum pedido encontrado.</Text></View>}
+      <FlatList data={orders} keyExtractor={(item) => String(item.orderId)} renderItem={renderItem} contentContainerStyle={styles.list}
+        ListEmptyComponent={<View style={styles.center}><Text style={styles.empty}>{t('ordersEmpty')}</Text></View>}
       />
     </View>
   );

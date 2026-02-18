@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { customerService } from '../services/api';
+import { useI18n } from '../context/I18nContext';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState([]);
@@ -10,13 +11,20 @@ export default function CustomersScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { t } = useI18n();
 
-  const fetch = async () => { try { const { data } = await customerService.getAll(); setCustomers(data); } catch {} finally { setLoading(false); } };
-  useFocusEffect(useCallback(() => { fetch(); }, []));
+  const fetchCustomers = async () => { try { const { data } = await customerService.getAll(); setCustomers(data); } catch {} finally { setLoading(false); } };
+  useFocusEffect(useCallback(() => { fetchCustomers(); }, []));
+
+  const showError = (title, msg) => {
+    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+    else Alert.alert(title, msg);
+  };
 
   const handleCreate = async () => {
-    if (!name || !email) { Alert.alert('Erro', 'Preencha todos os campos.'); return; }
-    try { setSubmitting(true); await customerService.create({ name, email }); setName(''); setEmail(''); setShowForm(false); fetch(); } catch { Alert.alert('Erro', 'Erro ao criar.'); } finally { setSubmitting(false); }
+    if (!name || !email) { showError(t('error'), t('fillAllFields')); return; }
+    try { setSubmitting(true); await customerService.create({ name, email }); setName(''); setEmail(''); setShowForm(false); fetchCustomers(); }
+    catch { showError(t('error'), t('createError')); } finally { setSubmitting(false); }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
@@ -24,14 +32,14 @@ export default function CustomersScreen() {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(!showForm)}>
-        <Text style={styles.addText}>{showForm ? 'Cancelar' : '+ Novo Cliente'}</Text>
+        <Text style={styles.addText}>{showForm ? t('cancel') : t('newCustomer')}</Text>
       </TouchableOpacity>
       {showForm && (
         <View style={styles.form}>
-          <TextInput style={styles.input} placeholder="Nome" value={name} onChangeText={setName} />
-          <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder={t('customerName')} value={name} onChangeText={setName} />
+          <TextInput style={styles.input} placeholder={t('customerEmail')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
           <TouchableOpacity style={styles.saveBtn} onPress={handleCreate} disabled={submitting}>
-            <Text style={styles.saveText}>{submitting ? 'Salvando...' : 'Salvar'}</Text>
+            <Text style={styles.saveText}>{submitting ? t('saving') : t('save')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -44,7 +52,7 @@ export default function CustomersScreen() {
             <Text style={styles.cardSub}>{item.email}</Text>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhum cliente cadastrado.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{t('noCustomers')}</Text>}
       />
     </View>
   );

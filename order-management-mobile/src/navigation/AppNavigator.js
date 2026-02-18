@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../context/I18nContext';
 import { orderService } from '../services/api';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -15,14 +16,6 @@ import ApprovalQueueScreen from '../screens/ApprovalQueueScreen';
 
 const Stack = createNativeStackNavigator();
 
-const menuItems = [
-  { key: 'Pedidos', label: 'Meus Pedidos', icon: '📋', roles: ['Admin', 'User'] },
-  { key: 'Novo', label: 'Novo Pedido', icon: '➕', roles: ['Admin', 'User'] },
-  { key: 'Fila', label: 'Fila de Aprovação', icon: '⏳', roles: ['Admin'] },
-  { key: 'Clientes', label: 'Clientes', icon: '👤', roles: ['Admin', 'User'] },
-  { key: 'Pagamento', label: 'Cond. Pagamento', icon: '💳', roles: ['Admin', 'User'] },
-];
-
 const screens = {
   Pedidos: OrdersScreen,
   Novo: CreateOrderScreen,
@@ -33,9 +26,18 @@ const screens = {
 
 function SidebarLayout({ navigation }) {
   const { user, isAdmin, logout } = useAuth();
+  const { t, locale, changeLanguage, languages } = useI18n();
   const [activeScreen, setActiveScreen] = useState('Pedidos');
   const [pendingCount, setPendingCount] = useState(0);
   const role = user?.role || 'User';
+
+  const menuItems = [
+    { key: 'Pedidos', label: t('menuMyOrders'), icon: '📋', roles: ['Admin', 'User'] },
+    { key: 'Novo', label: t('menuNewOrder'), icon: '➕', roles: ['Admin', 'User'] },
+    { key: 'Fila', label: t('menuApprovalQueue'), icon: '⏳', roles: ['Admin'] },
+    { key: 'Clientes', label: t('menuCustomers'), icon: '👤', roles: ['Admin', 'User'] },
+    { key: 'Pagamento', label: t('menuPaymentConditions'), icon: '💳', roles: ['Admin', 'User'] },
+  ];
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -57,10 +59,10 @@ function SidebarLayout({ navigation }) {
     <View style={styles.layout}>
       <View style={styles.sidebar}>
         <View style={styles.sidebarHeader}>
-          <Text style={styles.appTitle}>Order Management</Text>
+          <Text style={styles.appTitle}>{t('appTitle')}</Text>
           <Text style={styles.userName}>{user?.fullName || user?.username}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{isAdmin ? 'Administrador' : 'Usuário'}</Text>
+            <Text style={styles.roleText}>{isAdmin ? t('administrator') : t('user')}</Text>
           </View>
         </View>
 
@@ -82,16 +84,35 @@ function SidebarLayout({ navigation }) {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Text style={styles.logoutIcon}>🚪</Text>
-          <Text style={styles.logoutText}>Sair</Text>
-        </TouchableOpacity>
+        <View style={styles.sidebarFooter}>
+          <View style={styles.langSection}>
+            <Text style={styles.langTitle}>🌐 {t('language')}</Text>
+            <View style={styles.langRow}>
+              {languages.map(lang => (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[styles.langBtn, locale === lang.code && styles.langBtnActive]}
+                  onPress={() => changeLanguage(lang.code)}
+                >
+                  <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>
+                    {lang.label.split(' ')[0]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+            <Text style={styles.logoutIcon}>🚪</Text>
+            <Text style={styles.logoutText}>{t('logout')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.content}>
         <View style={styles.contentHeader}>
           <Text style={styles.contentTitle}>
-            {visibleItems.find(i => i.key === activeScreen)?.label || 'Pedidos'}
+            {visibleItems.find(i => i.key === activeScreen)?.label || t('menuMyOrders')}
           </Text>
         </View>
         <View style={styles.contentBody}>
@@ -113,6 +134,7 @@ function SidebarLayout({ navigation }) {
 
 export default function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
+  const { t } = useI18n();
 
   if (loading) return null;
 
@@ -124,7 +146,7 @@ export default function AppNavigator() {
         ) : (
           <>
             <Stack.Screen name="Home" component={SidebarLayout} options={{ headerShown: false }} />
-            <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Detalhes do Pedido' }} />
+            <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: `${t('orderTitle')}` }} />
           </>
         )}
       </Stack.Navigator>
@@ -215,12 +237,47 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
   },
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#312e81',
+  },
+  langSection: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  langTitle: {
+    color: '#a5b4fc',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  langRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  langBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#4338ca',
+  },
+  langBtnActive: {
+    backgroundColor: '#4338ca',
+  },
+  langText: {
+    fontSize: 14,
+    color: '#a5b4fc',
+  },
+  langTextActive: {
+    color: '#fff',
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#312e81',
+    paddingTop: 12,
   },
   logoutIcon: {
     fontSize: 16,
