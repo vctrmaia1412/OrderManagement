@@ -47,7 +47,7 @@ export default function LoginScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Entrar</Text>}
         </TouchableOpacity>
 
-        <Text style={styles.hint}>Credenciais: admin / admin123</Text>
+        <Text style={styles.hint}>admin/admin123 | joao/joao123 | maria/maria123</Text>
       </View>
     </KeyboardAvoidingView>
   );

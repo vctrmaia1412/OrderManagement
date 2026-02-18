@@ -10,6 +10,7 @@ public record OrderDetailResponse(
     decimal TotalAmount,
     string Status,
     bool RequiresManualApproval,
+    string CreatedBy,
     DateTime CreatedAt)
 {
     public List<OrderItemResponse> Items { get; init; } = new();

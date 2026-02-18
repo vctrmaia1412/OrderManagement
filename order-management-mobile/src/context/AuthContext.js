@@ -19,7 +19,12 @@ export function AuthProvider({ children }) {
 
   const login = async (username, password) => {
     const { data } = await authService.login(username, password);
-    const userData = { username: data.username, expiration: data.expiration };
+    const userData = {
+      username: data.username,
+      role: data.role,
+      fullName: data.fullName,
+      expiration: data.expiration,
+    };
     await AsyncStorage.setItem('user', JSON.stringify(userData));
     await AsyncStorage.setItem('token', data.token);
     setUser(userData);
@@ -31,8 +36,10 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const isAdmin = user?.role === 'Admin';
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isAdmin, loading }}>
       {children}
     </AuthContext.Provider>
   );

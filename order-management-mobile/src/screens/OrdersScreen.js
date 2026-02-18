@@ -60,7 +60,7 @@ export default function OrdersScreen({ navigation }) {
         </View>
       </View>
       <Text style={styles.customer}>{item.customerName}</Text>
-      <Text style={styles.condition}>{item.paymentConditionDescription}</Text>
+      <Text style={styles.condition}>{item.paymentConditionDescription} • por {item.createdBy}</Text>
       <View style={styles.cardFooter}>
         <Text style={styles.total}>{fmt(item.totalAmount)}</Text>
         {item.requiresManualApproval && item.status === 'Criado' ? (

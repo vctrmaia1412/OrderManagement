@@ -10,4 +10,5 @@ public record OrderResponse(
     decimal TotalAmount,
     string Status,
     bool RequiresManualApproval,
+    string CreatedBy,
     DateTime CreatedAt);

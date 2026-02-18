@@ -14,9 +14,7 @@ public class OrderQueryService : IOrderQueryService
         _dbConnection = dbConnection;
     }
 
-    public async Task<IEnumerable<OrderResponse>> GetAllAsync(CancellationToken cancellationToken = default)
-    {
-        const string sql = @"
+    private const string BaseSelectSql = @"
             SELECT 
                 o.OrderId,
                 o.CustomerId,
@@ -27,12 +25,27 @@ public class OrderQueryService : IOrderQueryService
                 o.TotalAmount,
                 o.Status,
                 o.RequiresManualApproval,
+                o.CreatedBy,
                 o.CreatedAt
             FROM Orders o
             INNER JOIN Customers c ON c.CustomerId = o.CustomerId
-            INNER JOIN PaymentConditions pc ON pc.PaymentConditionId = o.PaymentConditionId
-            ORDER BY o.OrderDate DESC";
+            INNER JOIN PaymentConditions pc ON pc.PaymentConditionId = o.PaymentConditionId";
 
+    public async Task<IEnumerable<OrderResponse>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var sql = BaseSelectSql + " ORDER BY o.OrderDate DESC";
+        return await _dbConnection.QueryAsync<OrderResponse>(sql);
+    }
+
+    public async Task<IEnumerable<OrderResponse>> GetByUserAsync(string username, CancellationToken cancellationToken = default)
+    {
+        var sql = BaseSelectSql + " WHERE o.CreatedBy = @Username ORDER BY o.OrderDate DESC";
+        return await _dbConnection.QueryAsync<OrderResponse>(sql, new { Username = username });
+    }
+
+    public async Task<IEnumerable<OrderResponse>> GetPendingApprovalAsync(CancellationToken cancellationToken = default)
+    {
+        var sql = BaseSelectSql + " WHERE o.RequiresManualApproval = 1 AND o.Status = 'Criado' ORDER BY o.OrderDate DESC";
         return await _dbConnection.QueryAsync<OrderResponse>(sql);
     }
 
@@ -49,6 +62,7 @@ public class OrderQueryService : IOrderQueryService
                 o.TotalAmount,
                 o.Status,
                 o.RequiresManualApproval,
+                o.CreatedBy,
                 o.CreatedAt
             FROM Orders o
             INNER JOIN Customers c ON c.CustomerId = o.CustomerId

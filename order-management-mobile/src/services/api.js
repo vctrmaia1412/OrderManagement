@@ -49,6 +49,7 @@ export const paymentConditionService = {
 
 export const orderService = {
   getAll: () => api.get('/orders'),
+  getPending: () => api.get('/orders/pending'),
   getById: (id) => api.get(`/orders/${id}`),
   create: (data) => api.post('/orders', data),
   approve: (id) => api.put(`/orders/${id}/approve`),

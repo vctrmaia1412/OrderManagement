@@ -26,6 +26,11 @@ public class OrderMapping : IEntityTypeConfiguration<Order>
         builder.Property(o => o.RequiresManualApproval)
             .IsRequired();
 
+        builder.Property(o => o.CreatedBy)
+            .HasMaxLength(100)
+            .IsRequired()
+            .HasDefaultValue("admin");
+
         builder.Property(o => o.CreatedAt)
             .IsRequired();
 

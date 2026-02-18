@@ -14,6 +14,7 @@ public class Order
     public decimal TotalAmount { get; private set; }
     public OrderStatus Status { get; private set; }
     public bool RequiresManualApproval { get; private set; }
+    public string CreatedBy { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
 
     public Customer Customer { get; private set; } = null!;
@@ -23,10 +24,11 @@ public class Order
 
     private Order() { }
 
-    public Order(int customerId, int paymentConditionId, IEnumerable<OrderItem> items)
+    public Order(int customerId, int paymentConditionId, IEnumerable<OrderItem> items, string createdBy = "admin")
     {
         CustomerId = customerId;
         PaymentConditionId = paymentConditionId;
+        CreatedBy = createdBy;
         OrderDate = DateTime.UtcNow;
         CreatedAt = DateTime.UtcNow;
 

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OrderManagement.Application.Commands;
@@ -28,10 +29,29 @@ public class OrdersController : ControllerBase
         _cancelHandler = cancelHandler;
     }
 
+    // Admin vê todos os pedidos; usuário comum vê apenas os seus
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var orders = await _queryService.GetAllAsync(cancellationToken);
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        var username = User.FindFirst(ClaimTypes.Name)?.Value;
+
+        if (role == "Admin")
+        {
+            var orders = await _queryService.GetAllAsync(cancellationToken);
+            return Ok(orders);
+        }
+
+        var userOrders = await _queryService.GetByUserAsync(username!, cancellationToken);
+        return Ok(userOrders);
+    }
+
+    // Fila de aprovação: retorna apenas pedidos pendentes de aprovação manual (somente Admin)
+    [HttpGet("pending")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetPendingApproval(CancellationToken cancellationToken)
+    {
+        var orders = await _queryService.GetPendingApprovalAsync(cancellationToken);
         return Ok(orders);
     }
 
@@ -50,7 +70,8 @@ public class OrdersController : ControllerBase
     {
         try
         {
-            var orderId = await _createHandler.HandleAsync(request, cancellationToken);
+            var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "admin";
+            var orderId = await _createHandler.HandleAsync(request, username, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = orderId }, new { OrderId = orderId });
         }
         catch (KeyNotFoundException ex)
@@ -60,6 +81,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpPut("{id:int}/approve")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Approve(int id, CancellationToken cancellationToken)
     {
         try
