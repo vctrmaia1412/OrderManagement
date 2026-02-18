@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { orderService } from '../services/api';
 
 const statusColors = { Criado:'#e5e7eb', AguardandoAprovacao:'#fef3c7', Aprovado:'#dbeafe', Processando:'#ede9fe', Pago:'#d1fae5', Cancelado:'#fee2e2' };
 const statusTextColors = { Criado:'#374151', AguardandoAprovacao:'#92400e', Aprovado:'#1d4ed8', Processando:'#6d28d9', Pago:'#065f46', Cancelado:'#991b1b' };
 const statusLabels = { Criado:'Criado', AguardandoAprovacao:'Aguard. Aprovação', Aprovado:'Aprovado', Processando:'Processando', Pago:'Pago', Cancelado:'Cancelado' };
+
+function showAlert(title, msg) {
+  if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
+}
+
+function showConfirm(msg) {
+  if (Platform.OS === 'web') return window.confirm(msg);
+  return true;
+}
 
 export default function OrderDetailScreen({ route, navigation }) {
   const { orderId } = route.params;
@@ -22,16 +31,27 @@ export default function OrderDetailScreen({ route, navigation }) {
   const fmtDate = (d) => new Date(d).toLocaleDateString('pt-BR');
 
   const handleApprove = async () => {
-    try { setActionLoading(true); await orderService.approve(orderId); Alert.alert('Sucesso', 'Pedido aprovado!'); fetchOrder(); } catch (e) { Alert.alert('Erro', e.response?.data?.message || 'Erro ao aprovar.'); } finally { setActionLoading(false); }
+    if (!showConfirm(`Deseja aprovar o pedido #${orderId}?`)) return;
+    try {
+      setActionLoading(true);
+      await orderService.approve(orderId);
+      showAlert('Sucesso', 'Pedido aprovado!');
+      fetchOrder();
+    } catch (e) {
+      showAlert('Erro', e.response?.data?.message || 'Erro ao aprovar.');
+    } finally { setActionLoading(false); }
   };
 
-  const handleCancel = () => {
-    Alert.alert('Confirmar', 'Deseja cancelar este pedido?', [
-      { text: 'Não', style: 'cancel' },
-      { text: 'Sim', style: 'destructive', onPress: async () => {
-        try { setActionLoading(true); await orderService.cancel(orderId); Alert.alert('Sucesso', 'Pedido cancelado.'); fetchOrder(); } catch (e) { Alert.alert('Erro', e.response?.data?.message || 'Erro ao cancelar.'); } finally { setActionLoading(false); }
-      }},
-    ]);
+  const handleCancel = async () => {
+    if (!showConfirm(`Deseja cancelar o pedido #${orderId}?`)) return;
+    try {
+      setActionLoading(true);
+      await orderService.cancel(orderId);
+      showAlert('Sucesso', 'Pedido cancelado.');
+      fetchOrder();
+    } catch (e) {
+      showAlert('Erro', e.response?.data?.message || 'Erro ao cancelar.');
+    } finally { setActionLoading(false); }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
@@ -53,6 +73,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         <Row label="Data" value={fmtDate(order.orderDate)} />
         <Row label="Total" value={fmt(order.totalAmount)} bold />
         <Row label="Aprov. Manual" value={order.requiresManualApproval ? 'Sim' : 'Não'} />
+        <Row label="Criado por" value={order.createdBy} />
       </View>
 
       {order.deliveryTerm && (
@@ -78,18 +99,18 @@ export default function OrderDetailScreen({ route, navigation }) {
 
       <View style={styles.actions}>
         {order.status === 'Criado' && order.requiresManualApproval && (
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#059669' }]} onPress={handleApprove} disabled={actionLoading}>
-            <Text style={styles.actionText}>{actionLoading ? 'Processando...' : 'Aprovar Pedido'}</Text>
-          </TouchableOpacity>
+          <Pressable style={[styles.actionBtn, { backgroundColor: '#059669' }, actionLoading && styles.disabled]} onPress={handleApprove} disabled={actionLoading}>
+            <Text style={styles.actionText}>{actionLoading ? 'Processando...' : '✓ Aprovar Pedido'}</Text>
+          </Pressable>
         )}
         {order.status !== 'Pago' && order.status !== 'Cancelado' && (
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dc2626' }]} onPress={handleCancel} disabled={actionLoading}>
-            <Text style={styles.actionText}>Cancelar Pedido</Text>
-          </TouchableOpacity>
+          <Pressable style={[styles.actionBtn, { backgroundColor: '#dc2626' }, actionLoading && styles.disabled]} onPress={handleCancel} disabled={actionLoading}>
+            <Text style={styles.actionText}>{actionLoading ? 'Processando...' : '✕ Cancelar Pedido'}</Text>
+          </Pressable>
         )}
-        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#6b7280' }]} onPress={() => { setLoading(true); fetchOrder(); }}>
-          <Text style={styles.actionText}>Atualizar</Text>
-        </TouchableOpacity>
+        <Pressable style={[styles.actionBtn, { backgroundColor: '#6b7280' }]} onPress={() => navigation.goBack()}>
+          <Text style={styles.actionText}>← Voltar</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -121,6 +142,7 @@ const styles = StyleSheet.create({
   itemSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   itemTotal: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
   actions: { marginTop: 8, marginBottom: 30 },
-  actionBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  actionBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginBottom: 10, cursor: 'pointer' },
+  disabled: { opacity: 0.6 },
   actionText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 });
