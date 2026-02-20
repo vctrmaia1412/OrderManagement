@@ -56,4 +56,12 @@ export const orderService = {
   cancel: (id) => api.put(`/orders/${id}/cancel`),
 };
 
+export const userService = {
+  getAll: () => api.get('/users'),
+  getById: (id) => api.get(`/users/${id}`),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  changePassword: (id, newPassword) => api.put(`/users/${id}/password`, { newPassword }),
+};
+
 export default api;

@@ -13,6 +13,7 @@ import CreateOrderScreen from '../screens/CreateOrderScreen';
 import CustomersScreen from '../screens/CustomersScreen';
 import PaymentConditionsScreen from '../screens/PaymentConditionsScreen';
 import ApprovalQueueScreen from '../screens/ApprovalQueueScreen';
+import UsersScreen from '../screens/UsersScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,6 +23,7 @@ const screens = {
   Fila: ApprovalQueueScreen,
   Clientes: CustomersScreen,
   Pagamento: PaymentConditionsScreen,
+  Usuarios: UsersScreen,
 };
 
 function SidebarLayout({ navigation }) {
@@ -32,16 +34,19 @@ function SidebarLayout({ navigation }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const role = user?.role || 'User';
 
+  const isAdminOrManager = role === 'Admin' || role === 'Manager';
+
   const menuItems = [
-    { key: 'Pedidos', label: t('menuMyOrders'), icon: '📋', roles: ['Admin', 'User'] },
-    { key: 'Novo', label: t('menuNewOrder'), icon: '➕', roles: ['Admin', 'User'] },
-    { key: 'Fila', label: t('menuApprovalQueue'), icon: '⏳', roles: ['Admin'] },
-    { key: 'Clientes', label: t('menuCustomers'), icon: '👤', roles: ['Admin', 'User'] },
-    { key: 'Pagamento', label: t('menuPaymentConditions'), icon: '💳', roles: ['Admin', 'User'] },
+    { key: 'Pedidos', label: t('menuMyOrders'), icon: '📋', roles: ['Admin', 'Manager', 'User'] },
+    { key: 'Novo', label: t('menuNewOrder'), icon: '➕', roles: ['Admin', 'Manager', 'User'] },
+    { key: 'Fila', label: t('menuApprovalQueue'), icon: '⏳', roles: ['Admin', 'Manager'] },
+    { key: 'Clientes', label: t('menuCustomers'), icon: '👤', roles: ['Admin', 'Manager', 'User'] },
+    { key: 'Pagamento', label: t('menuPaymentConditions'), icon: '💳', roles: ['Admin', 'Manager', 'User'] },
+    { key: 'Usuarios', label: t('menuUsers'), icon: '🔐', roles: ['Admin'] },
   ];
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdminOrManager) return;
     const fetchCount = async () => {
       try {
         const { data } = await orderService.getPending();
@@ -51,7 +56,7 @@ function SidebarLayout({ navigation }) {
     fetchCount();
     const interval = setInterval(fetchCount, 10000);
     return () => clearInterval(interval);
-  }, [isAdmin, activeScreen]);
+  }, [isAdminOrManager, activeScreen]);
 
   const visibleItems = menuItems.filter(item => item.roles.includes(role));
   const ActiveComponent = screens[activeScreen] || OrdersScreen;
@@ -63,7 +68,7 @@ function SidebarLayout({ navigation }) {
           <Text style={styles.appTitle}>{t('appTitle')}</Text>
           <Text style={styles.userName}>{user?.fullName || user?.username}</Text>
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{isAdmin ? t('administrator') : t('user')}</Text>
+            <Text style={styles.roleText}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
           </View>
         </View>
 
@@ -99,7 +104,7 @@ function SidebarLayout({ navigation }) {
                 <View style={styles.settingsItemContent}>
                   <Text style={styles.settingsItemLabel}>{t('profile')}</Text>
                   <Text style={styles.settingsItemValue}>{user?.fullName || user?.username}</Text>
-                  <Text style={styles.settingsItemSub}>{isAdmin ? t('administrator') : t('user')}</Text>
+                  <Text style={styles.settingsItemSub}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
                 </View>
               </View>
 

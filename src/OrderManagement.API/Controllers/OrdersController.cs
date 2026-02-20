@@ -36,7 +36,7 @@ public class OrdersController : ControllerBase
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
         var username = User.FindFirst(ClaimTypes.Name)?.Value;
 
-        if (role == "Admin")
+        if (role == "Admin" || role == "Manager")
         {
             var orders = await _queryService.GetAllAsync(cancellationToken);
             return Ok(orders);
@@ -48,7 +48,7 @@ public class OrdersController : ControllerBase
 
     // Fila de aprovação: retorna apenas pedidos pendentes de aprovação manual (somente Admin)
     [HttpGet("pending")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> GetPendingApproval(CancellationToken cancellationToken)
     {
         var orders = await _queryService.GetPendingApprovalAsync(cancellationToken);
@@ -81,7 +81,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpPut("{id:int}/approve")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Approve(int id, CancellationToken cancellationToken)
     {
         try
