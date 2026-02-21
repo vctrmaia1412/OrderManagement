@@ -1,21 +1,26 @@
 # OrderManagement
 
-## Projeto
-
-**OrderManagement** — API de Gerenciamento de Pedidos. Projeto de teste tecnico que implementa uma API REST para cadastro de clientes, condicoes de pagamento e pedidos, com aprovacao automatica ou manual conforme valor, processamento assincrono via fila in-memory e autenticacao JWT.
+Sistema completo de Gerenciamento de Pedidos com backend ASP.NET Core Web API e frontend React Native (Expo). Desenvolvido como teste tecnico seguindo Clean Architecture, CQRS Light, autenticacao JWT, processamento assincrono e internacionalizacao em 3 idiomas.
 
 ---
 
 ## Tecnologias
 
+### Backend
 - **.NET 8** (ASP.NET Core Web API)
-- **Entity Framework Core 8** (escrita)
-- **Dapper** (leitura)
+- **Entity Framework Core 8** (escrita / commands)
+- **Dapper** (leitura / queries)
 - **SQL Server 2022 Express**
-- **xUnit + Moq** (testes)
-- **React Native (Expo)** (frontend mobile)
-- **React 18 + Vite + Tailwind CSS** (frontend web alternativo)
-- **JWT Authentication**
+- **BCrypt.Net** (hash de senhas)
+- **JWT Authentication** (Microsoft.AspNetCore.Authentication.JwtBearer)
+- **xUnit + Moq** (testes unitarios)
+
+### Frontend
+- **React Native** (Expo SDK 54)
+- **React Navigation** (navegacao com sidebar customizada)
+- **Axios** (HTTP client)
+- **AsyncStorage** (persistencia local)
+- **@react-native-picker/picker** (seletores)
 
 ---
 
@@ -23,71 +28,367 @@
 
 Clean Architecture com 4 camadas:
 
-- **OrderManagement.Domain**
-  - Entidades: `Customer`, `PaymentCondition`, `Order`, `OrderItem`, `DeliveryTerm`
-  - Enums: `OrderStatus`
-  - Interfaces de repositorio: `IOrderRepository`, `ICustomerRepository`, `IPaymentConditionRepository`, `IUnitOfWork`
+```
+OrderManagement/
+├── OrderManagement.sln
+├── src/
+│   ├── OrderManagement.Domain/           # Entidades, Enums, Interfaces de repositorio
+│   ├── OrderManagement.Application/      # Commands, DTOs, Interfaces de query
+│   ├── OrderManagement.Infrastructure/   # EF Core, Dapper, Repos, Worker, Fila, Hash
+│   └── OrderManagement.API/              # Controllers, JWT, CORS, Swagger
+├── order-management-mobile/              # Frontend React Native (Expo)
+├── order-management-web/                 # Frontend React Web (alternativo)
+└── tests/
+    └── OrderManagement.Tests/            # Testes unitarios (xUnit + Moq)
+```
 
-- **OrderManagement.Application**
-  - Commands: `CreateOrderCommandHandler`, `ApproveOrderCommandHandler`, `CancelOrderCommandHandler`, `CreateCustomerCommandHandler`, `CreatePaymentConditionCommandHandler`
-  - DTOs (Request/Response)
-  - Interfaces de query: `IOrderQueryService`, `ICustomerQueryService`, `IPaymentConditionQueryService`, `IOrderProcessingQueue`
+### Camada Domain
+- Entidades: `Customer`, `PaymentCondition`, `Order`, `OrderItem`, `DeliveryTerm`, `User`
+- Enums: `OrderStatus` (Criado, AguardandoAprovacao, Aprovado, Processando, Pago, Cancelado)
+- Interfaces: `IOrderRepository`, `ICustomerRepository`, `IPaymentConditionRepository`, `IUnitOfWork`
 
-- **OrderManagement.Infrastructure**
-  - EF Core: `AppDbContext`, mapeamentos Fluent API
-  - Repositorios (padrao UnitOfWork)
-  - Queries com Dapper (SQL direto para leitura)
-  - Background Worker: `OrderProcessingWorker`
-  - Fila in-memory: `InMemoryOrderProcessingQueue`
-  - `DependencyInjection`
+### Camada Application
+- Commands: `CreateOrderCommandHandler`, `ApproveOrderCommandHandler`, `CancelOrderCommandHandler`, `CreateCustomerCommandHandler`, `CreatePaymentConditionCommandHandler`
+- DTOs Request: `CreateOrderRequest`, `LoginRequest`, `CreateUserRequest`, `UpdateUserRequest`, `ChangePasswordRequest`
+- DTOs Response: `OrderResponse`, `OrderDetailResponse`, `LoginResponse`, `UserResponse`
+- Interfaces: `IOrderQueryService`, `ICustomerQueryService`, `IPaymentConditionQueryService`, `IOrderProcessingQueue`
 
-- **OrderManagement.API**
-  - Controllers: Auth, Customers, PaymentConditions, Orders
-  - Configuracao JWT, CORS, Swagger
+### Camada Infrastructure
+- EF Core: `AppDbContext` com Fluent API mappings e seed data
+- Repositorios com padrao UnitOfWork
+- Queries Dapper com SQL direto para leitura otimizada
+- `OrderProcessingWorker` (BackgroundService) + `InMemoryOrderProcessingQueue`
+- `HashHelper` (BCrypt wrapper)
 
-### Estrutura de pastas
+### Camada API
+- Controllers: `AuthController`, `OrdersController`, `CustomersController`, `PaymentConditionsController`, `UsersController`
+- JWT + CORS + Swagger configurados em `Program.cs`
+
+---
+
+## CQRS Light
+
+O projeto adota um **CQRS leve** (sem MediatR nem event sourcing):
+
+- **Commands**: utilizam Entity Framework Core via UnitOfWork e repositorios para **escrita**.
+- **Queries**: utilizam **Dapper** com SQL direto para **leitura**, permitindo consultas otimizadas.
+- Separacao logica entre leitura e escrita, sem introduzir infraestrutura de mensageria ou bibliotecas adicionais.
+
+---
+
+## Regras de Negocio
+
+- **Pedidos <= R$ 5.000**: criados com status **Pago** e `RequiresManualApproval = false`.
+- **Pedidos > R$ 5.000**: criados com status **Criado** e `RequiresManualApproval = true`. Requerem aprovacao manual via `PUT /api/orders/{id}/approve`, que altera o status para **Pago**.
+- **Todos os pedidos** sao publicados na fila de processamento para calculo de prazo de entrega (DeliveryTerm de 10 dias).
+
+---
+
+## Processamento Assincrono (Fila + Worker)
+
+1. `POST /api/orders` cria o pedido e publica `OrderProcessingMessage(OrderId)` na fila in-memory.
+2. `OrderProcessingWorker` (BackgroundService) consome a mensagem.
+3. O worker simula processamento (delay 2s) e insere um `DeliveryTerm` com prazo de 10 dias.
+4. Simulacao de message broker real (RabbitMQ/Azure Service Bus) sem dependencias externas.
+
+---
+
+## Autenticacao e Autorizacao
+
+### JWT
+- `POST /api/auth/login` retorna token JWT com claims: `Name`, `Role`, `Jti`.
+- Todos os endpoints (exceto login) protegidos com `[Authorize]`.
+- Senhas armazenadas com **BCrypt** (hash no banco de dados).
+- Autenticacao contra tabela `Users` no SQL Server (nao mais hardcoded).
+
+### 3 Perfis de Acesso
+
+| Perfil | Descricao | Permissoes |
+|--------|-----------|------------|
+| **Admin** | Administrador do sistema | Tudo + Gerenciar usuarios (CRUD, ativar/desativar, trocar senha, alterar perfil) |
+| **Manager** (Gerente) | Gerente comercial | Ver todos os pedidos + Aprovar pedidos + Ver fila de aprovacao |
+| **User** (Usuario) | Operador comum | Criar pedidos + Ver apenas seus proprios pedidos |
+
+### Usuarios Pre-cadastrados (Seed)
+
+| Login | Senha | Perfil | Nome |
+|-------|-------|--------|------|
+| `admin` | `admin123` | Admin | Administrador do Sistema |
+| `gerente` | `gerente123` | Manager | Carlos Gerente |
+| `joao` | `joao123` | User | Joao Silva |
+| `maria` | `maria123` | User | Maria Santos |
+
+---
+
+## Internacionalizacao (i18n)
+
+O frontend suporta **3 idiomas** com troca instantanea:
+
+- **Portugues (PT-BR)** — padrao
+- **Ingles (EN-US)**
+- **Espanhol (ES-ES)**
+
+A preferencia de idioma e salva em AsyncStorage e persiste entre sessoes. O seletor de idioma esta disponivel na tela de login e no menu de configuracoes da sidebar.
+
+---
+
+## Endpoints da API
+
+| Metodo | Endpoint | Descricao | Acesso |
+|--------|----------|-----------|--------|
+| POST | `/api/auth/login` | Login (retorna JWT) | Publico |
+| GET | `/api/customers` | Listar clientes | Autenticado |
+| POST | `/api/customers` | Criar cliente | Autenticado |
+| GET | `/api/paymentconditions` | Listar condicoes de pagamento | Autenticado |
+| POST | `/api/paymentconditions` | Criar condicao de pagamento | Autenticado |
+| GET | `/api/orders` | Listar pedidos (Admin/Manager: todos; User: proprios) | Autenticado |
+| GET | `/api/orders/pending` | Pedidos pendentes de aprovacao | Admin, Manager |
+| GET | `/api/orders/{id}` | Detalhe do pedido | Autenticado |
+| POST | `/api/orders` | Criar pedido | Autenticado |
+| PUT | `/api/orders/{id}/approve` | Aprovar pedido | Admin, Manager |
+| PUT | `/api/orders/{id}/cancel` | Cancelar pedido | Autenticado |
+| GET | `/api/users` | Listar usuarios | Admin |
+| GET | `/api/users/{id}` | Detalhe do usuario | Admin |
+| POST | `/api/users` | Criar usuario | Admin |
+| PUT | `/api/users/{id}` | Atualizar usuario (nome, email, role, ativo) | Admin |
+| PUT | `/api/users/{id}/password` | Trocar senha do usuario | Admin |
+
+Swagger: **http://localhost:5000/swagger**
+
+---
+
+## Seed Data (Dados Pre-cadastrados)
+
+### Condicoes de Pagamento
+
+| ID | Descricao | Parcelas |
+|----|-----------|----------|
+| 1 | A Vista | 1 |
+| 2 | 7 DDL | 1 |
+| 3 | 14 DDL | 1 |
+| 4 | 28 DDL | 1 |
+| 5 | 30 DDL | 1 |
+| 6 | 30/60 DDL | 2 |
+| 7 | 30/60/90 DDL | 3 |
+| 8 | 30/60/90/120 DDL | 4 |
+
+*DDL = Dias Da data de Liberacao (faturamento/entrega)*
+
+### Clientes
+
+| ID | Nome | Email |
+|----|------|-------|
+| 1 | Atacadao S.A. | compras@atacadao.com.br |
+| 2 | Carrefour Comercio e Industria Ltda | compras@carrefour.com.br |
+| 3 | GPA - Grupo Pao de Acucar | compras@gpabr.com |
+| 4 | Assai Atacadista | compras@assai.com.br |
+| 5 | Makro Atacadista S.A. | compras@makro.com.br |
+| 6 | Distribuidora Redfox Alimentos | pedidos@redfox.com.br |
+| 7 | Frigorifico Silva Exportacao | comercial@frigsilva.com.br |
+| 8 | Saudi Agricultural & Livestock Investment Co. | import@salic.com.sa |
+
+---
+
+## Frontend React Native (Expo)
+
+### Telas
+
+| Tela | Descricao | Acesso |
+|------|-----------|--------|
+| **Login** | Autenticacao com seletor de idioma | Publico |
+| **Meus Pedidos** | Lista de pedidos com botao de aprovar inline | Todos |
+| **Novo Pedido** | Formulario com cliente, condicao de pagamento e itens | Todos |
+| **Detalhe do Pedido** | Informacoes completas + aprovar/cancelar | Todos |
+| **Fila de Aprovacao** | Pedidos pendentes de aprovacao manual (> R$ 5.000) | Admin, Manager |
+| **Clientes** | Listagem e cadastro de clientes | Todos |
+| **Cond. Pagamento** | Listagem e cadastro de condicoes | Todos |
+| **Usuarios** | Gerenciamento completo de usuarios | Admin |
+
+### Navegacao
+
+- **Sidebar lateral** (layout profissional desktop-like)
+- Menu de **Configuracoes** (engrenagem) no rodape com: Perfil, Idioma (PT/US/ES), Sair
+- Badge dinamico na Fila de Aprovacao (atualiza a cada 10s)
+
+---
+
+## Como Executar (Passo a Passo)
+
+### Pre-requisitos
+
+1. **.NET 8 SDK** — https://dotnet.microsoft.com/download/dotnet/8.0
+2. **SQL Server 2022 Express** — https://www.microsoft.com/sql-server/sql-server-downloads
+3. **Node.js 20+** — https://nodejs.org/
+4. **EF Core CLI** (se nao tiver):
+   ```bash
+   dotnet tool install --global dotnet-ef
+   ```
+
+### 1. Clonar o repositorio
+
+```bash
+git clone <url-do-repositorio>
+cd OrderManagement
+```
+
+### 2. Configurar o SQL Server
+
+Verifique se o SQL Server Express esta rodando. A connection string padrao esta em `src/OrderManagement.API/appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=OrderManagementDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
+  }
+}
+```
+
+Se sua instancia do SQL Server tiver nome diferente, ajuste o valor de `Server=`.
+
+### 3. Restaurar pacotes e criar o banco de dados
+
+```bash
+cd OrderManagement
+dotnet restore
+```
+
+Aplicar todas as migrations (cria o banco, tabelas e seed data):
+
+```bash
+dotnet ef database update --project src/OrderManagement.Infrastructure --startup-project src/OrderManagement.API
+```
+
+Isso criara automaticamente:
+- Banco `OrderManagementDb`
+- Tabelas: `Customers`, `PaymentConditions`, `Orders`, `OrderItems`, `DeliveryTerms`, `Users`
+- Dados seed: 8 condicoes de pagamento, 8 clientes, 4 usuarios
+
+### 4. Iniciar o Backend
+
+```bash
+dotnet run --project src/OrderManagement.API
+```
+
+API disponivel em: **http://localhost:5000**
+Swagger em: **http://localhost:5000/swagger**
+
+### 5. Iniciar o Frontend (React Native / Expo)
+
+Em outro terminal:
+
+```bash
+cd order-management-mobile
+npm install
+npx expo start --web --port 8081
+```
+
+Frontend disponivel em: **http://localhost:8081**
+
+### 6. Acessar o sistema
+
+1. Abra **http://localhost:8081** no navegador
+2. Faca login com `admin` / `admin123`
+3. Navegue pela sidebar: Pedidos, Novo Pedido, Fila de Aprovacao, Clientes, Cond. Pagamento, Usuarios
+4. Teste trocar o idioma no menu de Configuracoes (engrenagem)
+5. Teste com outros usuarios: `gerente/gerente123` (Manager), `joao/joao123` (User)
+
+### 7. Testes unitarios
+
+```bash
+dotnet test
+```
+
+---
+
+## Decisoes Tecnicas
+
+- **Sem MediatR**: CQRS Light sem complexidade adicional.
+- **Sem mensageria real**: fila in-memory com `ConcurrentQueue<T>`.
+- **Sem microsservicos**: monolito com camadas bem definidas.
+- **Sem Event Sourcing**: persistencia em estado atual.
+- **BCrypt** para hash de senhas (nao texto puro).
+- **UnitOfWork** para consistencia transacional nas escritas.
+- **Records** para DTOs (imutabilidade e concisao).
+- **Fluent API** (EF Core) para separacao de mapeamentos.
+- **React Native (Expo)**: conforme requisito do edital, com suporte web.
+- **Sidebar navigation**: layout profissional adaptado para web.
+
+---
+
+## Consideracoes Arquiteturais e Evolucao
+
+### Escalabilidade
+
+A separacao entre leitura (Dapper) e escrita (EF Core) permite evoluir para um CQRS completo, com banco read-only otimizado e cache distribuido (Redis) sem impactar o dominio. As queries Dapper podem ser direcionadas para uma replica de leitura.
+
+### Evolucao para Microsservicos
+
+A fila in-memory pode ser substituida por **RabbitMQ** ou **Azure Service Bus**. A interface `IOrderProcessingQueue` serve como contrato — trocar a implementacao nao exige mudancas nos handlers. A camada Domain, isolada e sem dependencias externas, facilita extracao como servico autonomo.
+
+### Consistencia
+
+Escritas transacionadas via UnitOfWork (atomicidade entre Order e OrderItems). DeliveryTerm criado de forma assincrona pelo worker (consistencia eventual).
+
+### Seguranca
+
+- JWT com chave simetrica em `appsettings.json` (apenas para teste).
+- Em producao: segredo em Azure Key Vault, refresh token com rotacao, Identity Provider real.
+- Senhas com BCrypt (custo 11).
+- Usuarios desativaveis sem exclusao (soft disable).
+
+### Observabilidade
+
+Base para evolucao com:
+- Logs estruturados (Serilog + Seq/Elasticsearch)
+- Health Checks (`/health`)
+- Metricas (Prometheus/Grafana)
+- Distributed Tracing (OpenTelemetry)
+
+---
+
+## Estrutura Completa de Pastas
 
 ```
 OrderManagement/
 ├── OrderManagement.sln
+├── README.md
+├── .gitignore
 ├── src/
 │   ├── OrderManagement.API/
 │   │   ├── Controllers/
 │   │   │   ├── AuthController.cs
 │   │   │   ├── CustomersController.cs
 │   │   │   ├── OrdersController.cs
-│   │   │   └── PaymentConditionsController.cs
+│   │   │   ├── PaymentConditionsController.cs
+│   │   │   └── UsersController.cs
 │   │   ├── Program.cs
 │   │   └── appsettings.json
 │   ├── OrderManagement.Application/
 │   │   ├── Commands/
-│   │   │   ├── ApproveOrderCommandHandler.cs
-│   │   │   ├── CancelOrderCommandHandler.cs
-│   │   │   ├── CreateCustomerCommandHandler.cs
-│   │   │   ├── CreateOrderCommandHandler.cs
-│   │   │   └── CreatePaymentConditionCommandHandler.cs
 │   │   ├── DTOs/
 │   │   │   ├── Request/
+│   │   │   │   ├── CreateOrderRequest.cs
+│   │   │   │   ├── CreateUserRequest.cs
+│   │   │   │   ├── UpdateUserRequest.cs
+│   │   │   │   ├── ChangePasswordRequest.cs
+│   │   │   │   └── LoginRequest.cs
 │   │   │   └── Response/
+│   │   │       ├── OrderResponse.cs
+│   │   │       ├── OrderDetailResponse.cs
+│   │   │       ├── LoginResponse.cs
+│   │   │       └── UserResponse.cs
 │   │   └── Interfaces/
-│   │       ├── ICustomerQueryService.cs
-│   │       ├── IOrderProcessingQueue.cs
-│   │       ├── IOrderQueryService.cs
-│   │       └── IPaymentConditionQueryService.cs
 │   ├── OrderManagement.Domain/
 │   │   ├── Entities/
 │   │   │   ├── Customer.cs
 │   │   │   ├── DeliveryTerm.cs
 │   │   │   ├── Order.cs
 │   │   │   ├── OrderItem.cs
-│   │   │   └── PaymentCondition.cs
+│   │   │   ├── PaymentCondition.cs
+│   │   │   └── User.cs
 │   │   ├── Enums/
 │   │   │   └── OrderStatus.cs
 │   │   └── Interfaces/
-│   │       ├── ICustomerRepository.cs
-│   │       ├── IOrderRepository.cs
-│   │       ├── IPaymentConditionRepository.cs
-│   │       └── IUnitOfWork.cs
 │   └── OrderManagement.Infrastructure/
 │       ├── BackgroundServices/
 │       │   ├── InMemoryOrderProcessingQueue.cs
@@ -99,23 +400,22 @@ OrderManagement/
 │       │       ├── DeliveryTermMapping.cs
 │       │       ├── OrderItemMapping.cs
 │       │       ├── OrderMapping.cs
-│       │       └── PaymentConditionMapping.cs
+│       │       ├── PaymentConditionMapping.cs
+│       │       └── UserMapping.cs
 │       ├── Migrations/
 │       ├── Queries/
-│       │   ├── CustomerQueryService.cs
-│       │   ├── OrderQueryService.cs
-│       │   └── PaymentConditionQueryService.cs
 │       ├── Repositories/
-│       │   ├── CustomerRepository.cs
-│       │   ├── OrderRepository.cs
-│       │   ├── PaymentConditionRepository.cs
-│       │   └── UnitOfWork.cs
+│       ├── HashHelper.cs
 │       └── DependencyInjection.cs
-├── order-management-mobile/       # Frontend React Native (Expo)
+├── order-management-mobile/
 │   ├── App.js
+│   ├── package.json
 │   └── src/
 │       ├── context/
-│       │   └── AuthContext.js
+│       │   ├── AuthContext.js
+│       │   └── I18nContext.js
+│       ├── i18n/
+│       │   └── translations.js
 │       ├── navigation/
 │       │   └── AppNavigator.js
 │       ├── screens/
@@ -123,194 +423,17 @@ OrderManagement/
 │       │   ├── OrdersScreen.js
 │       │   ├── OrderDetailScreen.js
 │       │   ├── CreateOrderScreen.js
+│       │   ├── ApprovalQueueScreen.js
 │       │   ├── CustomersScreen.js
-│       │   └── PaymentConditionsScreen.js
+│       │   ├── PaymentConditionsScreen.js
+│       │   └── UsersScreen.js
 │       └── services/
 │           └── api.js
-├── order-management-web/          # Frontend React + Vite + Tailwind (alternativo)
-│   └── src/
-│       ├── components/
-│       ├── context/
-│       ├── pages/
-│       ├── services/
-│       ├── App.jsx
-│       └── main.jsx
+├── order-management-web/                 # Frontend React Web (alternativo)
 └── tests/
     └── OrderManagement.Tests/
 ```
 
 ---
 
-## CQRS Light
-
-O projeto adota um **CQRS leve** (sem MediatR nem event sourcing):
-
-- **Commands**: utilizam Entity Framework Core via UnitOfWork e repositorios para **escrita**. Cada comando e tratado por um handler que orquestra repositorios e publica mensagens na fila quando aplicavel.
-- **Queries**: utilizam **Dapper** com SQL direto para **leitura**, permitindo consultas otimizadas e projecoes especificas (ex.: detalhe do pedido com itens).
-- Separacao logica entre leitura e escrita, sem introduzir infraestrutura de mensageria ou bibliotecas adicionais de CQRS.
-
----
-
-## Estrategia de Persistencia
-
-- **EF Core** para escrita: mapeamentos via Fluent API, transacoes garantidas pelo UnitOfWork.
-- **Dapper** para leitura: consultas SQL otimizadas e uso de `QueryMultiple` para visoes de detalhe (ex.: pedido + itens).
-- **SQL Server 2022 Express** como banco de dados.
-
----
-
-## Regras de Negocio
-
-- **Pedidos com valor <= R$ 5.000**: criados com status **Pago** e `RequiresManualApproval = false`.
-- **Pedidos com valor > R$ 5.000**: criados com status **Criado** e `RequiresManualApproval = true`. Requerem aprovacao manual via `PUT /api/orders/{id}/approve`, que altera o status diretamente para **Pago**.
-- **Todos os pedidos**, independentemente do valor, sao publicados na fila de processamento apos a criacao para calculo do prazo de entrega.
-
----
-
-## Processamento Assincrono (Fila + Worker)
-
-Fluxo simulado sem dependencias externas (sem RabbitMQ/Azure Service Bus):
-
-1. **POST /api/orders** - Cria o pedido e publica uma mensagem `OrderProcessingMessage(OrderId, DeliveryDays)` na fila in-memory, **independentemente do status** do pedido.
-2. **OrderProcessingWorker** (BackgroundService) consome a mensagem da fila.
-3. O worker simula o calculo do prazo de entrega (delay de 2s) e insere um registro `DeliveryTerm` com prazo de 10 dias a partir da data do pedido.
-4. Trata-se de uma simulacao de um barramento de mensagens real (ex.: RabbitMQ, Azure Service Bus), sem dependencias externas.
-
----
-
-## Eventos de Dominio
-
-Os eventos de dominio sao simulados pelo mecanismo da fila: quando um pedido e criado, uma mensagem `OrderProcessingMessage` e publicada na fila independentemente do status. O **OrderProcessingWorker** atua como "handler" desse evento, calculando e inserindo o prazo de entrega (`DeliveryTerm`). Em producao, essa fila in-memory pode ser substituida por um message broker real (RabbitMQ, Azure Service Bus, etc.), mantendo a mesma ideia de evento assincrono.
-
----
-
-## Autenticacao JWT
-
-- **POST /api/auth/login** com `username` e `password`.
-- Retorna um token JWT com claims: `Name`, `Role`, `Jti`.
-- Todos os demais endpoints sao protegidos com `[Authorize]`.
-- Swagger configurado com suporte a Bearer token (botao "Authorize").
-- **Credenciais de teste**: `admin` / `admin123`.
-
----
-
-## Endpoints da API
-
-| Metodo | Endpoint | Descricao | Autenticacao |
-|--------|----------|-----------|--------------|
-| POST   | `/api/auth/login` | Login (retorna JWT) | Publico |
-| GET    | `/api/customers` | Listar clientes | Protegido |
-| POST   | `/api/customers` | Criar cliente | Protegido |
-| GET    | `/api/paymentconditions` | Listar condicoes de pagamento | Protegido |
-| POST   | `/api/paymentconditions` | Criar condicao de pagamento | Protegido |
-| GET    | `/api/orders` | Listar pedidos | Protegido |
-| GET    | `/api/orders/{id}` | Detalhe do pedido | Protegido |
-| POST   | `/api/orders` | Criar pedido | Protegido |
-| PUT    | `/api/orders/{id}/approve` | Aprovar pedido (manual) | Protegido |
-| PUT    | `/api/orders/{id}/cancel` | Cancelar pedido | Protegido |
-
----
-
-## Como Executar
-
-### Pre-requisitos
-
-- .NET 8 SDK
-- SQL Server 2022 Express
-- Node.js 20+ (para o frontend)
-
-### Backend
-
-```bash
-cd OrderManagement
-dotnet restore
-dotnet ef database update --project src/OrderManagement.Infrastructure --startup-project src/OrderManagement.API
-dotnet run --project src/OrderManagement.API
-```
-
-API disponivel em: **http://localhost:5000**
-
-### Frontend React Native (Expo)
-
-```bash
-cd OrderManagement/order-management-mobile
-npm install
-npx expo start --web
-```
-
-App disponivel em: **http://localhost:8081** (web) ou via Expo Go no celular.
-
-**Telas**: Login -> Pedidos (listagem) -> Detalhe do Pedido (aprovar/cancelar) -> Novo Pedido -> Clientes -> Condicoes de Pagamento.
-
-### Frontend Web (alternativo)
-
-```bash
-cd OrderManagement/order-management-web
-npm install
-npm run dev
-```
-
-Frontend disponivel em: **http://localhost:3000**
-
-### Testes
-
-```bash
-dotnet test
-```
-
----
-
-## Decisoes Tecnicas
-
-- **Sem MediatR**: CQRS Light sem complexidade adicional de biblioteca de mediator.
-- **Sem mensageria real**: fila in-memory com `ConcurrentQueue` para simular processamento assincrono.
-- **Sem microsservicos**: aplicacao monolitica com camadas bem definidas.
-- **Sem Event Sourcing**: persistencia em estado atual (EF Core + Dapper).
-- **UnitOfWork** para consistencia transacional nas escritas.
-- **Records** para DTOs (imutabilidade e concisao).
-- **Fluent API** em vez de Data Annotations no EF Core (melhor separacao e controle dos mapeamentos).
-- **React Native (Expo)**: conforme requisito do edital. O frontend web (Vite) foi mantido como alternativa.
-
----
-
-## Consideracoes Arquiteturais e Evolucao
-
-### Escalabilidade
-
-A separacao entre leitura (Dapper) e escrita (EF Core) permite evoluir naturalmente para um modelo CQRS completo, com banco read-only otimizado e eventual cache distribuido (ex.: Redis) sem impactar o dominio. As queries Dapper podem ser direcionadas para uma replica de leitura, enquanto os commands continuam operando no banco principal — bastando alterar a connection string de leitura, sem tocar na logica de negocio.
-
-### Evolucao para Microsservicos
-
-A fila in-memory (`ConcurrentQueue<T>`) foi utilizada apenas para simplificacao do teste. Em um ambiente produtivo, poderia ser substituida por **RabbitMQ** ou **Azure Service Bus**, permitindo que o processamento de pedidos fosse isolado em um microsservico independente.
-
-A camada Domain permanece isolada e sem dependencias externas, o que facilitaria a extracao do modulo de Orders como servico autonomo. A interface `IOrderProcessingQueue` serve como contrato de abstracao — trocar a implementacao de `InMemoryOrderProcessingQueue` para um adapter de RabbitMQ nao exigiria mudancas nos handlers de comando.
-
-### Estrategia de Consistencia
-
-As escritas sao transacionadas via **UnitOfWork**, garantindo **atomicidade** entre `Order` e `OrderItems` — ambos sao persistidos na mesma transacao ou nenhum e salvo.
-
-O `DeliveryTerm` e criado de forma **assincrona** pelo worker, seguindo o principio de **consistencia eventual** (*eventual consistency*). Isso significa que, por um breve periodo apos a criacao do pedido, o prazo de entrega ainda nao existe — mas sera processado e vinculado ao pedido assim que o worker consumir a mensagem da fila. Esse modelo e o padrao em sistemas distribuidos e orientados a eventos.
-
-### Seguranca
-
-O token JWT e gerado com chave simetrica configurada em `appsettings.json` apenas para fins de teste. Em producao:
-
-- O segredo JWT seria armazenado em **Azure Key Vault** ou em **variaveis de ambiente** protegidas, nunca em arquivos versionados.
-- O tempo de expiracao seria configurado conforme politica de seguranca corporativa.
-- Seria adicionado **refresh token** com rotacao automatica para sessoes de longa duracao.
-- As credenciais de usuario seriam validadas contra um Identity Provider real (ex.: ASP.NET Identity, Azure AD).
-
-### Observabilidade
-
-Em um ambiente real, o sistema seria instrumentado com:
-
-- **Logs estruturados** via Serilog (com sinks para Seq, Elasticsearch ou Application Insights), permitindo correlacao entre requisicoes HTTP e processamento assincrono do worker.
-- **Health Checks** (`/health`) para monitoramento de disponibilidade do banco e da fila.
-- **Metricas** de tempo de processamento de pedidos e profundidade da fila, exportadas para Prometheus/Grafana ou Azure Monitor.
-- **Distributed Tracing** (OpenTelemetry) para rastreabilidade ponta a ponta em cenarios de microsservicos.
-
-O `OrderProcessingWorker` ja emite logs informativos a cada etapa do processamento, servindo como base para essa evolucao.
-
----
-
-*Projeto de teste tecnico — Order Management API.*
+*Projeto de teste tecnico — Order Management System (Minerva Foods)*
