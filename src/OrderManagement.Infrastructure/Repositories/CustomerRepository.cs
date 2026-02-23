@@ -28,4 +28,9 @@ public class CustomerRepository : ICustomerRepository
     {
         _context.Customers.Update(customer);
     }
+
+    public void Delete(Customer customer)
+    {
+        _context.Customers.Remove(customer);
+    }
 }

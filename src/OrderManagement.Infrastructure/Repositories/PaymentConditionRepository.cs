@@ -27,4 +27,9 @@ public class PaymentConditionRepository : IPaymentConditionRepository
     {
         _context.PaymentConditions.Update(paymentCondition);
     }
+
+    public void Delete(PaymentCondition paymentCondition)
+    {
+        _context.PaymentConditions.Remove(paymentCondition);
+    }
 }

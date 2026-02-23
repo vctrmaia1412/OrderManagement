@@ -38,7 +38,11 @@ public static class DependencyInjection
 
         services.AddScoped<LoginCommandHandler>();
         services.AddScoped<CreateCustomerCommandHandler>();
+        services.AddScoped<UpdateCustomerCommandHandler>();
+        services.AddScoped<DeleteCustomerCommandHandler>();
         services.AddScoped<CreatePaymentConditionCommandHandler>();
+        services.AddScoped<UpdatePaymentConditionCommandHandler>();
+        services.AddScoped<DeletePaymentConditionCommandHandler>();
         services.AddScoped<CreateOrderCommandHandler>();
         services.AddScoped<ApproveOrderCommandHandler>();
         services.AddScoped<CancelOrderCommandHandler>();

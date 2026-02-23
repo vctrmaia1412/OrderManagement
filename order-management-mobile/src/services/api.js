@@ -40,12 +40,16 @@ export const customerService = {
   getAll: () => api.get('/customers'),
   getById: (id) => api.get(`/customers/${id}`),
   create: (data) => api.post('/customers', data),
+  update: (id, data) => api.put(`/customers/${id}`, data),
+  remove: (id) => api.delete(`/customers/${id}`),
 };
 
 export const paymentConditionService = {
   getAll: () => api.get('/paymentconditions'),
   getById: (id) => api.get(`/paymentconditions/${id}`),
   create: (data) => api.post('/paymentconditions', data),
+  update: (id, data) => api.put(`/paymentconditions/${id}`, data),
+  remove: (id) => api.delete(`/paymentconditions/${id}`),
 };
 
 export const orderService = {

@@ -13,13 +13,19 @@ public class PaymentConditionsController : ControllerBase
 {
     private readonly IPaymentConditionQueryService _queryService;
     private readonly CreatePaymentConditionCommandHandler _createHandler;
+    private readonly UpdatePaymentConditionCommandHandler _updateHandler;
+    private readonly DeletePaymentConditionCommandHandler _deleteHandler;
 
     public PaymentConditionsController(
         IPaymentConditionQueryService queryService,
-        CreatePaymentConditionCommandHandler createHandler)
+        CreatePaymentConditionCommandHandler createHandler,
+        UpdatePaymentConditionCommandHandler updateHandler,
+        DeletePaymentConditionCommandHandler deleteHandler)
     {
         _queryService = queryService;
         _createHandler = createHandler;
+        _updateHandler = updateHandler;
+        _deleteHandler = deleteHandler;
     }
 
     [HttpGet]
@@ -44,5 +50,19 @@ public class PaymentConditionsController : ControllerBase
     {
         var paymentConditionId = await _createHandler.HandleAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = paymentConditionId }, new { PaymentConditionId = paymentConditionId });
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdatePaymentConditionRequest request, CancellationToken cancellationToken)
+    {
+        await _updateHandler.HandleAsync(id, request, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        await _deleteHandler.HandleAsync(id, cancellationToken);
+        return NoContent();
     }
 }

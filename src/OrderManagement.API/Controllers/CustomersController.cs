@@ -13,13 +13,19 @@ public class CustomersController : ControllerBase
 {
     private readonly ICustomerQueryService _queryService;
     private readonly CreateCustomerCommandHandler _createHandler;
+    private readonly UpdateCustomerCommandHandler _updateHandler;
+    private readonly DeleteCustomerCommandHandler _deleteHandler;
 
     public CustomersController(
         ICustomerQueryService queryService,
-        CreateCustomerCommandHandler createHandler)
+        CreateCustomerCommandHandler createHandler,
+        UpdateCustomerCommandHandler updateHandler,
+        DeleteCustomerCommandHandler deleteHandler)
     {
         _queryService = queryService;
         _createHandler = createHandler;
+        _updateHandler = updateHandler;
+        _deleteHandler = deleteHandler;
     }
 
     [HttpGet]
@@ -44,5 +50,19 @@ public class CustomersController : ControllerBase
     {
         var customerId = await _createHandler.HandleAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = customerId }, new { CustomerId = customerId });
+    }
+
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateCustomerRequest request, CancellationToken cancellationToken)
+    {
+        await _updateHandler.HandleAsync(id, request, cancellationToken);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        await _deleteHandler.HandleAsync(id, cancellationToken);
+        return NoContent();
     }
 }
