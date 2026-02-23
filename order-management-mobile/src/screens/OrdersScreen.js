@@ -5,13 +5,20 @@ import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { statusColors, statusTextColors, formatCurrency, showAlert, showConfirm } from '../utils/helpers';
 
+const STATUS_FILTERS = ['Todos', 'Criado', 'Pago', 'Cancelado'];
+
 export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('Todos');
   const { user } = useAuth();
   const { t, statusLabel } = useI18n();
   const canApprove = user?.role === 'Admin' || user?.role === 'Manager';
+
+  const filteredOrders = activeFilter === 'Todos'
+    ? orders
+    : orders.filter(o => o.status === activeFilter);
 
   const fetchOrders = async () => {
     try {
@@ -72,15 +79,30 @@ export default function OrdersScreen({ navigation }) {
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
 
+  const getFilterLabel = (f) => f === 'Todos' ? t('filterAll') : statusLabel(f);
+
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.toolbar}>
+        <View style={styles.filterRow}>
+          {STATUS_FILTERS.map(f => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]}
+              onPress={() => setActiveFilter(f)}
+            >
+              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
+                {getFilterLabel(f)}{f === 'Todos' ? '' : ` (${orders.filter(o => o.status === f).length})`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchOrders}>
           <Text style={styles.refreshText}>{t('refresh')}</Text>
         </TouchableOpacity>
       </View>
       <FlatList
-        data={orders}
+        data={filteredOrders}
         keyExtractor={(item) => String(item.orderId)}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
@@ -93,7 +115,12 @@ export default function OrdersScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', justifyContent: 'flex-end', padding: 12, paddingBottom: 0 },
+  toolbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, paddingBottom: 0, flexWrap: 'wrap', gap: 8 },
+  filterRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  filterBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },
+  filterBtnActive: { backgroundColor: '#4338ca', borderColor: '#4338ca' },
+  filterText: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  filterTextActive: { color: '#fff', fontWeight: '700' },
   refreshBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#e5e7eb', borderRadius: 8 },
   refreshText: { fontSize: 13, color: '#374151', fontWeight: '600' },
   list: { padding: 16 },

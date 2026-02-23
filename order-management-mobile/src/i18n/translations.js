@@ -103,6 +103,9 @@ export const translations = {
     pendingCount: 'pedido(s) pendente(s)',
     noPending: 'Nenhum pedido pendente de aprovação.',
 
+    // Filters
+    filterAll: 'Todos',
+
     // Status
     statusCriado: 'Criado',
     statusAguardandoAprovacao: 'Aguard. Aprov.',
@@ -231,6 +234,8 @@ export const translations = {
     pendingCount: 'pending order(s)',
     noPending: 'No orders pending approval.',
 
+    filterAll: 'All',
+
     statusCriado: 'Created',
     statusAguardandoAprovacao: 'Awaiting Appr.',
     statusAprovado: 'Approved',
@@ -355,6 +360,8 @@ export const translations = {
 
     pendingCount: 'pedido(s) pendiente(s)',
     noPending: 'No hay pedidos pendientes de aprobación.',
+
+    filterAll: 'Todos',
 
     statusCriado: 'Creado',
     statusAguardandoAprovacao: 'Aguard. Aprob.',
