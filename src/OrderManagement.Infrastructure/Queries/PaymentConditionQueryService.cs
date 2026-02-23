@@ -21,7 +21,8 @@ public class PaymentConditionQueryService : IPaymentConditionQueryService
             FROM PaymentConditions
             ORDER BY Description";
 
-        return await _dbConnection.QueryAsync<PaymentConditionResponse>(sql);
+        return await _dbConnection.QueryAsync<PaymentConditionResponse>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
 
     public async Task<PaymentConditionResponse?> GetByIdAsync(int paymentConditionId, CancellationToken cancellationToken = default)
@@ -31,6 +32,7 @@ public class PaymentConditionQueryService : IPaymentConditionQueryService
             FROM PaymentConditions
             WHERE PaymentConditionId = @PaymentConditionId";
 
-        return await _dbConnection.QueryFirstOrDefaultAsync<PaymentConditionResponse>(sql, new { PaymentConditionId = paymentConditionId });
+        return await _dbConnection.QueryFirstOrDefaultAsync<PaymentConditionResponse>(
+            new CommandDefinition(sql, new { PaymentConditionId = paymentConditionId }, cancellationToken: cancellationToken));
     }
 }

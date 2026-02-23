@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { orderService, customerService, paymentConditionService } from '../services/api';
 import { useI18n } from '../context/I18nContext';
+import { formatCurrency, showAlert } from '../utils/helpers';
 
 export default function CreateOrderScreen({ navigation }) {
   const [customers, setCustomers] = useState([]);
@@ -18,8 +19,13 @@ export default function CreateOrderScreen({ navigation }) {
     const load = async () => {
       try {
         const [c, p] = await Promise.all([customerService.getAll(), paymentConditionService.getAll()]);
-        setCustomers(c.data); setConditions(p.data);
-      } catch {} finally { setLoading(false); }
+        setCustomers(c.data);
+        setConditions(p.data);
+      } catch (e) {
+        showAlert(t('error'), e.response?.data?.message || t('loadError'));
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, []);
@@ -29,30 +35,25 @@ export default function CreateOrderScreen({ navigation }) {
   const updateItem = (i, field, val) => { const copy = [...items]; copy[i] = { ...copy[i], [field]: val }; setItems(copy); };
 
   const total = items.reduce((s, it) => s + (parseInt(it.quantity) || 0) * (parseFloat(it.unitPrice) || 0), 0);
-  const fmt = (v) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-
-  const showError = (title, msg) => {
-    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
-    else Alert.alert(title, msg);
-  };
-  const showSuccess = (title, msg) => {
-    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
-    else Alert.alert(title, msg);
-  };
 
   const handleSubmit = async () => {
-    if (!customerId || !conditionId) { showError(t('error'), t('selectCustomerError')); return; }
-    if (items.some(i => !i.productName || !i.quantity || !i.unitPrice)) { showError(t('error'), t('fillItemsError')); return; }
+    if (!customerId || !conditionId) { showAlert(t('error'), t('selectCustomerError')); return; }
+    if (items.some(i => !i.productName || !i.quantity || !i.unitPrice)) { showAlert(t('error'), t('fillItemsError')); return; }
     try {
       setSubmitting(true);
       const payload = {
-        customerId: parseInt(customerId), paymentConditionId: parseInt(conditionId),
+        customerId: parseInt(customerId),
+        paymentConditionId: parseInt(conditionId),
         items: items.map(i => ({ productName: i.productName, quantity: parseInt(i.quantity), unitPrice: parseFloat(i.unitPrice) })),
       };
       const { data } = await orderService.create(payload);
-      showSuccess(t('success'), `${t('orderTitle')} #${data.orderId} ${t('orderCreated')}`);
+      showAlert(t('success'), `${t('orderTitle')} #${data.orderId} ${t('orderCreated')}`);
       navigation.navigate('Pedidos');
-    } catch (e) { showError(t('error'), e.response?.data?.message || t('createError')); } finally { setSubmitting(false); }
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('createError'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;
@@ -83,7 +84,7 @@ export default function CreateOrderScreen({ navigation }) {
           <TouchableOpacity onPress={addItem}><Text style={{ color: '#4338ca', fontWeight: '600' }}>{t('addItem')}</Text></TouchableOpacity>
         </View>
         {items.map((item, i) => (
-          <View key={i} style={styles.itemForm}>
+          <View key={`item-${i}`} style={styles.itemForm}>
             <TextInput style={[styles.input, { marginBottom: 6 }]} placeholder={t('product')} value={item.productName} onChangeText={v => updateItem(i, 'productName', v)} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TextInput style={[styles.input, { flex: 1 }]} placeholder={t('quantity')} value={item.quantity} onChangeText={v => updateItem(i, 'quantity', v)} keyboardType="numeric" />
@@ -96,7 +97,7 @@ export default function CreateOrderScreen({ navigation }) {
 
       <View style={styles.totalSection}>
         <Text style={styles.totalLabel}>{t('totalLabel')}</Text>
-        <Text style={styles.totalValue}>{fmt(total)}</Text>
+        <Text style={styles.totalValue}>{formatCurrency(total)}</Text>
       </View>
       {total > 5000 && <Text style={styles.approvalWarn}>{t('requiresApproval')}</Text>}
 

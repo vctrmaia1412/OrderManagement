@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { customerService } from '../services/api';
 import { useI18n } from '../context/I18nContext';
+import { showAlert } from '../utils/helpers';
 
 export default function CustomersScreen() {
   const [customers, setCustomers] = useState([]);
@@ -13,18 +14,33 @@ export default function CustomersScreen() {
   const [submitting, setSubmitting] = useState(false);
   const { t } = useI18n();
 
-  const fetchCustomers = async () => { try { const { data } = await customerService.getAll(); setCustomers(data); } catch {} finally { setLoading(false); } };
-  useFocusEffect(useCallback(() => { fetchCustomers(); }, []));
-
-  const showError = (title, msg) => {
-    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
-    else Alert.alert(title, msg);
+  const fetchCustomers = async () => {
+    try {
+      const { data } = await customerService.getAll();
+      setCustomers(data);
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('loadError'));
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useFocusEffect(useCallback(() => { fetchCustomers(); }, []));
+
   const handleCreate = async () => {
-    if (!name || !email) { showError(t('error'), t('fillAllFields')); return; }
-    try { setSubmitting(true); await customerService.create({ name, email }); setName(''); setEmail(''); setShowForm(false); fetchCustomers(); }
-    catch { showError(t('error'), t('createError')); } finally { setSubmitting(false); }
+    if (!name || !email) { showAlert(t('error'), t('fillAllFields')); return; }
+    try {
+      setSubmitting(true);
+      await customerService.create({ name, email });
+      setName('');
+      setEmail('');
+      setShowForm(false);
+      fetchCustomers();
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('createError'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;

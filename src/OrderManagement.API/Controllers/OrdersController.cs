@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using OrderManagement.Application.Commands;
 using OrderManagement.Application.DTOs.Request;
 using OrderManagement.Application.Interfaces;
+using OrderManagement.Domain.Constants;
 
 namespace OrderManagement.API.Controllers;
 
@@ -29,14 +30,13 @@ public class OrdersController : ControllerBase
         _cancelHandler = cancelHandler;
     }
 
-    // Admin vê todos os pedidos; usuário comum vê apenas os seus
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
         var role = User.FindFirst(ClaimTypes.Role)?.Value;
         var username = User.FindFirst(ClaimTypes.Name)?.Value;
 
-        if (role == "Admin" || role == "Manager")
+        if (role is Roles.Admin or Roles.Manager)
         {
             var orders = await _queryService.GetAllAsync(cancellationToken);
             return Ok(orders);
@@ -46,9 +46,8 @@ public class OrdersController : ControllerBase
         return Ok(userOrders);
     }
 
-    // Fila de aprovação: retorna apenas pedidos pendentes de aprovação manual (somente Admin)
     [HttpGet("pending")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> GetPendingApproval(CancellationToken cancellationToken)
     {
         var orders = await _queryService.GetPendingApprovalAsync(cancellationToken);
@@ -70,7 +69,8 @@ public class OrdersController : ControllerBase
     {
         try
         {
-            var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "admin";
+            var username = User.FindFirst(ClaimTypes.Name)?.Value
+                ?? throw new UnauthorizedAccessException("Usuário não identificado no token.");
             var orderId = await _createHandler.HandleAsync(request, username, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = orderId }, new { OrderId = orderId });
         }
@@ -81,7 +81,7 @@ public class OrdersController : ControllerBase
     }
 
     [HttpPut("{id:int}/approve")]
-    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Roles = Roles.AdminOrManager)]
     public async Task<IActionResult> Approve(int id, CancellationToken cancellationToken)
     {
         try
@@ -104,7 +104,11 @@ public class OrdersController : ControllerBase
     {
         try
         {
-            await _cancelHandler.HandleAsync(id, cancellationToken);
+            var username = User.FindFirst(ClaimTypes.Name)?.Value
+                ?? throw new UnauthorizedAccessException("Usuário não identificado no token.");
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? Roles.User;
+
+            await _cancelHandler.HandleAsync(id, username, role, cancellationToken);
             return Ok(new { Message = $"Pedido {id} cancelado." });
         }
         catch (KeyNotFoundException ex)
@@ -114,6 +118,10 @@ public class OrdersController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(403, new { ex.Message });
         }
     }
 }

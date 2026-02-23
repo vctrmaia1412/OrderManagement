@@ -12,10 +12,10 @@ public class DeliveryTerm
 
     private DeliveryTerm() { }
 
-    public DeliveryTerm(int deliveryDays)
+    public DeliveryTerm(int deliveryDays, DateTime orderDate)
     {
         DeliveryDays = deliveryDays;
-        EstimatedDeliveryDate = DateTime.UtcNow.AddDays(deliveryDays);
+        EstimatedDeliveryDate = orderDate.AddDays(deliveryDays);
         CreatedAt = DateTime.UtcNow;
     }
 }

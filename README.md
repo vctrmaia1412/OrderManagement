@@ -11,14 +11,14 @@ Sistema completo de Gerenciamento de Pedidos com backend ASP.NET Core Web API e 
 - **Entity Framework Core 8** (escrita / commands)
 - **Dapper** (leitura / queries)
 - **SQL Server 2022 Express**
-- **BCrypt.Net** (hash de senhas)
-- **JWT Authentication** (Microsoft.AspNetCore.Authentication.JwtBearer)
-- **xUnit + Moq** (testes unitarios)
+- **BCrypt.Net** (hash de senhas via `IPasswordHasher`)
+- **JWT Authentication** (Microsoft.AspNetCore.Authentication.JwtBearer via `ITokenService`)
+- **xUnit + Moq** (testes unitarios — 35 testes)
 
 ### Frontend
 - **React Native** (Expo SDK 54)
-- **React Navigation** (navegacao com sidebar customizada)
-- **Axios** (HTTP client)
+- **React Navigation** (navegacao com sidebar responsiva — desktop fixo, mobile drawer)
+- **Axios** (HTTP client com timeout e interceptors)
 - **AsyncStorage** (persistencia local)
 - **@react-native-picker/picker** (seletores)
 
@@ -32,37 +32,40 @@ Clean Architecture com 4 camadas:
 OrderManagement/
 ├── OrderManagement.sln
 ├── src/
-│   ├── OrderManagement.Domain/           # Entidades, Enums, Interfaces de repositorio
-│   ├── OrderManagement.Application/      # Commands, DTOs, Interfaces de query
-│   ├── OrderManagement.Infrastructure/   # EF Core, Dapper, Repos, Worker, Fila, Hash
-│   └── OrderManagement.API/              # Controllers, JWT, CORS, Swagger
+│   ├── OrderManagement.Domain/           # Entidades, Enums, Constantes, Interfaces de repositorio
+│   ├── OrderManagement.Application/      # Commands, DTOs (com validacao), Interfaces de query e servicos
+│   ├── OrderManagement.Infrastructure/   # EF Core, Dapper, Repos, Worker, Fila, Services (Hash, Token)
+│   └── OrderManagement.API/              # Controllers, JWT, CORS, Swagger, Middleware de excecoes
 ├── order-management-mobile/              # Frontend React Native (Expo)
 ├── order-management-web/                 # Frontend React Web (alternativo)
 └── tests/
-    └── OrderManagement.Tests/            # Testes unitarios (xUnit + Moq)
+    └── OrderManagement.Tests/            # Testes unitarios (xUnit + Moq — 35 testes)
 ```
 
 ### Camada Domain
 - Entidades: `Customer`, `PaymentCondition`, `Order`, `OrderItem`, `DeliveryTerm`, `User`
 - Enums: `OrderStatus` (Criado, AguardandoAprovacao, Aprovado, Processando, Pago, Cancelado)
-- Interfaces: `IOrderRepository`, `ICustomerRepository`, `IPaymentConditionRepository`, `IUnitOfWork`
+- Constantes: `Roles` (Admin, Manager, User) — centralizadas para type safety
+- Interfaces: `IOrderRepository`, `ICustomerRepository`, `IPaymentConditionRepository`, `IUserRepository`, `IUnitOfWork`
 
 ### Camada Application
-- Commands: `CreateOrderCommandHandler`, `ApproveOrderCommandHandler`, `CancelOrderCommandHandler`, `CreateCustomerCommandHandler`, `CreatePaymentConditionCommandHandler`
-- DTOs Request: `CreateOrderRequest`, `LoginRequest`, `CreateUserRequest`, `UpdateUserRequest`, `ChangePasswordRequest`
+- Commands: `LoginCommandHandler`, `CreateOrderCommandHandler`, `ApproveOrderCommandHandler`, `CancelOrderCommandHandler`, `CreateCustomerCommandHandler`, `CreatePaymentConditionCommandHandler`, `CreateUserCommandHandler`, `UpdateUserCommandHandler`, `ChangePasswordCommandHandler`
+- DTOs Request (com Data Annotations): `CreateOrderRequest`, `LoginRequest`, `CreateUserRequest`, `UpdateUserRequest`, `ChangePasswordRequest`
 - DTOs Response: `OrderResponse`, `OrderDetailResponse`, `LoginResponse`, `UserResponse`
-- Interfaces: `IOrderQueryService`, `ICustomerQueryService`, `IPaymentConditionQueryService`, `IOrderProcessingQueue`
+- Interfaces: `IOrderQueryService`, `ICustomerQueryService`, `IPaymentConditionQueryService`, `IUserQueryService`, `IOrderProcessingQueue`, `IPasswordHasher`, `ITokenService`
 
 ### Camada Infrastructure
 - EF Core: `AppDbContext` com Fluent API mappings e seed data
-- Repositorios com padrao UnitOfWork
-- Queries Dapper com SQL direto para leitura otimizada
+- Repositorios com padrao UnitOfWork (incluindo `UserRepository`)
+- Queries Dapper com SQL direto para leitura otimizada (com `CommandDefinition` para suporte a `CancellationToken`)
 - `OrderProcessingWorker` (BackgroundService) + `InMemoryOrderProcessingQueue`
-- `HashHelper` (BCrypt wrapper)
+- Services: `PasswordHasher` (BCrypt via interface `IPasswordHasher`), `TokenService` (JWT via interface `ITokenService`)
 
 ### Camada API
 - Controllers: `AuthController`, `OrdersController`, `CustomersController`, `PaymentConditionsController`, `UsersController`
+- Todos os controllers seguem o padrao CQRS: command handlers para escrita, query services para leitura
 - JWT + CORS + Swagger configurados em `Program.cs`
+- `GlobalExceptionMiddleware` para tratamento uniforme de erros
 
 ---
 
@@ -71,8 +74,9 @@ OrderManagement/
 O projeto adota um **CQRS leve** (sem MediatR nem event sourcing):
 
 - **Commands**: utilizam Entity Framework Core via UnitOfWork e repositorios para **escrita**.
-- **Queries**: utilizam **Dapper** com SQL direto para **leitura**, permitindo consultas otimizadas.
+- **Queries**: utilizam **Dapper** com SQL direto e `CommandDefinition` (com `CancellationToken`) para **leitura**, permitindo consultas otimizadas e cancelaveis.
 - Separacao logica entre leitura e escrita, sem introduzir infraestrutura de mensageria ou bibliotecas adicionais.
+- **Todos os controllers** seguem o padrao consistentemente — incluindo Auth e Users.
 
 ---
 
@@ -81,6 +85,7 @@ O projeto adota um **CQRS leve** (sem MediatR nem event sourcing):
 - **Pedidos <= R$ 5.000**: criados com status **Pago** e `RequiresManualApproval = false`.
 - **Pedidos > R$ 5.000**: criados com status **Criado** e `RequiresManualApproval = true`. Requerem aprovacao manual via `PUT /api/orders/{id}/approve`, que altera o status para **Pago**.
 - **Todos os pedidos** sao publicados na fila de processamento para calculo de prazo de entrega (DeliveryTerm de 10 dias).
+- **Cancelamento com ownership**: usuarios comuns so podem cancelar seus proprios pedidos; Admin/Manager podem cancelar qualquer pedido.
 
 ---
 
@@ -96,18 +101,19 @@ O projeto adota um **CQRS leve** (sem MediatR nem event sourcing):
 ## Autenticacao e Autorizacao
 
 ### JWT
-- `POST /api/auth/login` retorna token JWT com claims: `Name`, `Role`, `Jti`.
+- `POST /api/auth/login` via `LoginCommandHandler` retorna token JWT com claims: `Name`, `Role`, `Jti`.
 - Todos os endpoints (exceto login) protegidos com `[Authorize]`.
-- Senhas armazenadas com **BCrypt** (hash no banco de dados).
-- Autenticacao contra tabela `Users` no SQL Server (nao mais hardcoded).
+- Senhas armazenadas com **BCrypt** via interface `IPasswordHasher` (desacoplado e testavel).
+- Geracao de token extraida para `ITokenService` (desacoplada do controller).
+- Autenticacao contra tabela `Users` no SQL Server via `IUserRepository`.
 
-### 3 Perfis de Acesso
+### 3 Perfis de Acesso (constantes centralizadas em `Roles`)
 
 | Perfil | Descricao | Permissoes |
 |--------|-----------|------------|
 | **Admin** | Administrador do sistema | Tudo + Gerenciar usuarios (CRUD, ativar/desativar, trocar senha, alterar perfil) |
 | **Manager** (Gerente) | Gerente comercial | Ver todos os pedidos + Aprovar pedidos + Ver fila de aprovacao |
-| **User** (Usuario) | Operador comum | Criar pedidos + Ver apenas seus proprios pedidos |
+| **User** (Usuario) | Operador comum | Criar pedidos + Ver apenas seus proprios pedidos + Cancelar apenas seus proprios pedidos |
 
 ### Usuarios Pre-cadastrados (Seed)
 
@@ -132,6 +138,32 @@ A preferencia de idioma e salva em AsyncStorage e persiste entre sessoes. O sele
 
 ---
 
+## Validacao de Dados
+
+Todos os DTOs de Request possuem **Data Annotations** para validacao automatica pelo ASP.NET Core:
+
+- `[Required]` para campos obrigatorios
+- `[EmailAddress]` para validacao de email
+- `[MinLength]` para tamanho minimo (senhas, usernames)
+- `[Range]` para valores numericos (quantidade > 0, preco > 0)
+- Validacao de lista (`[MinLength(1)]` nos itens do pedido)
+
+---
+
+## Tratamento Global de Excecoes
+
+O `GlobalExceptionMiddleware` trata todas as excecoes nao capturadas de forma uniforme:
+
+| Tipo de Excecao | HTTP Status | Exemplo |
+|-----------------|-------------|---------|
+| `UnauthorizedAccessException` | 401 Unauthorized | Login invalido |
+| `KeyNotFoundException` | 404 Not Found | Pedido nao encontrado |
+| `ArgumentException` | 400 Bad Request | Dados invalidos |
+| `InvalidOperationException` | 400 Bad Request | Regra de negocio violada |
+| Demais excecoes | 500 Internal Error | Erro inesperado (sem stack trace) |
+
+---
+
 ## Endpoints da API
 
 | Metodo | Endpoint | Descricao | Acesso |
@@ -146,7 +178,7 @@ A preferencia de idioma e salva em AsyncStorage e persiste entre sessoes. O sele
 | GET | `/api/orders/{id}` | Detalhe do pedido | Autenticado |
 | POST | `/api/orders` | Criar pedido | Autenticado |
 | PUT | `/api/orders/{id}/approve` | Aprovar pedido | Admin, Manager |
-| PUT | `/api/orders/{id}/cancel` | Cancelar pedido | Autenticado |
+| PUT | `/api/orders/{id}/cancel` | Cancelar pedido (owner ou Admin/Manager) | Autenticado |
 | GET | `/api/users` | Listar usuarios | Admin |
 | GET | `/api/users/{id}` | Detalhe do usuario | Admin |
 | POST | `/api/users` | Criar usuario | Admin |
@@ -196,7 +228,7 @@ Swagger: **http://localhost:5000/swagger**
 | Tela | Descricao | Acesso |
 |------|-----------|--------|
 | **Login** | Autenticacao com seletor de idioma | Publico |
-| **Meus Pedidos** | Lista de pedidos com botao de aprovar inline | Todos |
+| **Meus Pedidos** | Lista de pedidos com botao de aprovar inline e pull-to-refresh | Todos |
 | **Novo Pedido** | Formulario com cliente, condicao de pagamento e itens | Todos |
 | **Detalhe do Pedido** | Informacoes completas + aprovar/cancelar | Todos |
 | **Fila de Aprovacao** | Pedidos pendentes de aprovacao manual (> R$ 5.000) | Admin, Manager |
@@ -206,9 +238,15 @@ Swagger: **http://localhost:5000/swagger**
 
 ### Navegacao
 
-- **Sidebar lateral** (layout profissional desktop-like)
+- **Layout responsivo**: sidebar fixa em telas >= 768px, drawer overlay em telas menores (mobile-friendly)
+- Hamburger menu para telas mobile
 - Menu de **Configuracoes** (engrenagem) no rodape com: Perfil, Idioma (PT/US/ES), Sair
 - Badge dinamico na Fila de Aprovacao (atualiza a cada 10s)
+
+### Utilitarios Compartilhados
+
+- `helpers.js`: `formatCurrency`, `formatDate`, `showAlert` (cross-platform), `showConfirm` (cross-platform com Promise), `statusColors`, `statusTextColors`
+- Alertas e confirmacoes funcionam em **web e mobile nativo** (`window.alert` + `Alert.alert` com fallback automatico)
 
 ---
 
@@ -298,20 +336,74 @@ Frontend disponivel em: **http://localhost:8081**
 dotnet test
 ```
 
+Resultado esperado: **35 testes aprovados** (Domain: 14, Application: 21)
+
+---
+
+## Estrategia de Persistencia
+
+**ORM / Acesso a Dados:** Entity Framework Core 8 (escrita) + Dapper (leitura).
+
+A escolha de dois ORMs lado a lado segue o principio de separacao de responsabilidades do CQRS:
+
+- **EF Core** gerencia o ciclo de vida das entidades, change tracking, transacoes e migrations. E ideal para operacoes de escrita que exigem integridade referencial e atomicidade.
+- **Dapper** executa queries SQL otimizadas diretamente para DTOs de leitura, sem overhead de materializar grafos de entidades. O uso de `CommandDefinition` garante propagacao correta de `CancellationToken` em todas as queries.
+
+**Justificativa**: EF Core sozinho introduziria overhead desnecessario nas leituras (change tracking, proxies); Dapper sozinho demandaria gerenciar manualmente transacoes e mapeamentos complexos. A combinacao extrai o melhor de cada ferramenta.
+
+---
+
+## Transacoes e Consistencia
+
+- **Escrita**: UnitOfWork com `SaveChangesAsync` garante atomicidade nas operacoes transacionais (ex: Order + OrderItems criados em uma unica transacao).
+- **Consistencia eventual**: DeliveryTerm criado assincronamente pelo Worker. Se o Worker falhar, o pedido permanece criado corretamente — o prazo de entrega pode ser recalculado em uma reexecucao.
+- **Isolamento**: cada request HTTP usa um escopo DI proprio (`Scoped`), garantindo que DbContext e UnitOfWork sao isolados entre requests concorrentes.
+
+---
+
+## Possivel Separacao de Leitura e Escrita (CQRS)
+
+A separacao entre leitura (Dapper) e escrita (EF Core) permite evoluir para um CQRS completo, com banco read-only otimizado e cache distribuido (Redis) sem impactar o dominio. As queries Dapper podem ser direcionadas para uma replica de leitura.
+
+O projeto ja implementa um **CQRS Light funcional**: command handlers para escrita e query services para leitura, com interfaces desacopladas. A evolucao para CQRS completo exigiria apenas trocar as implementacoes das interfaces sem alterar Application ou Domain.
+
+---
+
+## Estrategia para Eventos de Dominio
+
+Pedidos publicam `OrderProcessingMessage(OrderId)` em uma fila in-memory (`ConcurrentQueue<T>`). O `OrderProcessingWorker` (BackgroundService) consome assincronamente e cria o DeliveryTerm.
+
+A interface `IOrderProcessingQueue` serve como contrato — trocar a implementacao para RabbitMQ, Azure Service Bus ou AWS SQS nao exige mudancas nos handlers. O padrao `IServiceScopeFactory` dentro do Worker garante que scoped dependencies (DbContext, UnitOfWork) sao criadas corretamente dentro de um Singleton.
+
+---
+
+## Microservicos
+
+A solucao atual e um monolito com camadas bem definidas, projetado para facilitar extracao como microsservicos:
+
+- **Domain isolado**: zero dependencias externas, pode ser extraido como pacote NuGet compartilhado.
+- **Interfaces desacopladas**: `IPasswordHasher`, `ITokenService`, `IOrderProcessingQueue` — trocar implementacoes nao impacta a logica de negocio.
+- **Fila abstrata**: substituir `InMemoryOrderProcessingQueue` por RabbitMQ permite separar o Worker em um servico autonomo.
+- **Queries independentes**: query services com Dapper podem apontar para um banco de leitura separado sem alterar a API.
+
 ---
 
 ## Decisoes Tecnicas
 
-- **Sem MediatR**: CQRS Light sem complexidade adicional.
-- **Sem mensageria real**: fila in-memory com `ConcurrentQueue<T>`.
-- **Sem microsservicos**: monolito com camadas bem definidas.
+- **Sem MediatR**: CQRS Light sem complexidade adicional. Command handlers sao classes simples injetadas via DI.
+- **Sem mensageria real**: fila in-memory com `ConcurrentQueue<T>` para simplicidade.
+- **Sem microsservicos**: monolito com camadas bem definidas e interfaces desacopladas.
 - **Sem Event Sourcing**: persistencia em estado atual.
-- **BCrypt** para hash de senhas (nao texto puro).
+- **BCrypt via interface** (`IPasswordHasher`): desacoplado, testavel e substituivel.
+- **JWT via interface** (`ITokenService`): geracao de token extraida do controller para servico dedicado.
 - **UnitOfWork** para consistencia transacional nas escritas.
-- **Records** para DTOs (imutabilidade e concisao).
+- **Records** para DTOs (imutabilidade e concisao) com **Data Annotations** para validacao.
 - **Fluent API** (EF Core) para separacao de mapeamentos.
-- **React Native (Expo)**: conforme requisito do edital, com suporte web.
-- **Sidebar navigation**: layout profissional adaptado para web.
+- **Constantes `Roles`** centralizadas no Domain para type safety.
+- **`GlobalExceptionMiddleware`** para tratamento uniforme de erros em toda a API.
+- **React Native (Expo)**: conforme requisito do edital, com suporte web e layout responsivo.
+- **Sidebar responsiva**: layout desktop-like em telas largas, drawer overlay em telas mobile.
+- **Alertas cross-platform**: `showAlert`/`showConfirm` funcionam em web e mobile nativo.
 
 ---
 
@@ -333,8 +425,11 @@ Escritas transacionadas via UnitOfWork (atomicidade entre Order e OrderItems). D
 
 - JWT com chave simetrica em `appsettings.json` (apenas para teste).
 - Em producao: segredo em Azure Key Vault, refresh token com rotacao, Identity Provider real.
-- Senhas com BCrypt (custo 11).
+- Senhas com BCrypt via `IPasswordHasher` (custo 11).
 - Usuarios desativaveis sem exclusao (soft disable).
+- Cancelamento de pedidos com verificacao de ownership.
+- Validacao de dados em todos os endpoints via Data Annotations.
+- Middleware global de excecoes impede vazamento de stack traces.
 
 ### Observabilidade
 
@@ -361,10 +456,21 @@ OrderManagement/
 │   │   │   ├── OrdersController.cs
 │   │   │   ├── PaymentConditionsController.cs
 │   │   │   └── UsersController.cs
+│   │   ├── Middleware/
+│   │   │   └── GlobalExceptionMiddleware.cs
 │   │   ├── Program.cs
 │   │   └── appsettings.json
 │   ├── OrderManagement.Application/
 │   │   ├── Commands/
+│   │   │   ├── LoginCommandHandler.cs
+│   │   │   ├── CreateOrderCommandHandler.cs
+│   │   │   ├── ApproveOrderCommandHandler.cs
+│   │   │   ├── CancelOrderCommandHandler.cs
+│   │   │   ├── CreateCustomerCommandHandler.cs
+│   │   │   ├── CreatePaymentConditionCommandHandler.cs
+│   │   │   ├── CreateUserCommandHandler.cs
+│   │   │   ├── UpdateUserCommandHandler.cs
+│   │   │   └── ChangePasswordCommandHandler.cs
 │   │   ├── DTOs/
 │   │   │   ├── Request/
 │   │   │   │   ├── CreateOrderRequest.cs
@@ -378,7 +484,16 @@ OrderManagement/
 │   │   │       ├── LoginResponse.cs
 │   │   │       └── UserResponse.cs
 │   │   └── Interfaces/
+│   │       ├── IOrderQueryService.cs
+│   │       ├── ICustomerQueryService.cs
+│   │       ├── IPaymentConditionQueryService.cs
+│   │       ├── IUserQueryService.cs
+│   │       ├── IPasswordHasher.cs
+│   │       ├── ITokenService.cs
+│   │       └── IOrderProcessingQueue.cs
 │   ├── OrderManagement.Domain/
+│   │   ├── Constants/
+│   │   │   └── Roles.cs
 │   │   ├── Entities/
 │   │   │   ├── Customer.cs
 │   │   │   ├── DeliveryTerm.cs
@@ -389,6 +504,11 @@ OrderManagement/
 │   │   ├── Enums/
 │   │   │   └── OrderStatus.cs
 │   │   └── Interfaces/
+│   │       ├── IOrderRepository.cs
+│   │       ├── ICustomerRepository.cs
+│   │       ├── IPaymentConditionRepository.cs
+│   │       ├── IUserRepository.cs
+│   │       └── IUnitOfWork.cs
 │   └── OrderManagement.Infrastructure/
 │       ├── BackgroundServices/
 │       │   ├── InMemoryOrderProcessingQueue.cs
@@ -404,8 +524,19 @@ OrderManagement/
 │       │       └── UserMapping.cs
 │       ├── Migrations/
 │       ├── Queries/
+│       │   ├── OrderQueryService.cs
+│       │   ├── CustomerQueryService.cs
+│       │   ├── PaymentConditionQueryService.cs
+│       │   └── UserQueryService.cs
 │       ├── Repositories/
-│       ├── HashHelper.cs
+│       │   ├── OrderRepository.cs
+│       │   ├── CustomerRepository.cs
+│       │   ├── PaymentConditionRepository.cs
+│       │   ├── UserRepository.cs
+│       │   └── UnitOfWork.cs
+│       ├── Services/
+│       │   ├── PasswordHasher.cs
+│       │   └── TokenService.cs
 │       └── DependencyInjection.cs
 ├── order-management-mobile/
 │   ├── App.js
@@ -427,11 +558,20 @@ OrderManagement/
 │       │   ├── CustomersScreen.js
 │       │   ├── PaymentConditionsScreen.js
 │       │   └── UsersScreen.js
-│       └── services/
-│           └── api.js
+│       ├── services/
+│       │   └── api.js
+│       └── utils/
+│           └── helpers.js
 ├── order-management-web/                 # Frontend React Web (alternativo)
 └── tests/
     └── OrderManagement.Tests/
+        ├── Application/
+        │   ├── CreateOrderCommandHandlerTests.cs
+        │   ├── ApproveOrderCommandHandlerTests.cs
+        │   ├── CancelOrderCommandHandlerTests.cs
+        │   └── LoginCommandHandlerTests.cs
+        └── Domain/
+            └── OrderTests.cs
 ```
 
 ---

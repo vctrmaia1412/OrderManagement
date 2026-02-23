@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { paymentConditionService } from '../services/api';
 import { useI18n } from '../context/I18nContext';
+import { showAlert } from '../utils/helpers';
 
 export default function PaymentConditionsScreen() {
   const [conditions, setConditions] = useState([]);
@@ -13,18 +14,33 @@ export default function PaymentConditionsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const { t } = useI18n();
 
-  const fetchConditions = async () => { try { const { data } = await paymentConditionService.getAll(); setConditions(data); } catch {} finally { setLoading(false); } };
-  useFocusEffect(useCallback(() => { fetchConditions(); }, []));
-
-  const showError = (title, msg) => {
-    if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
-    else Alert.alert(title, msg);
+  const fetchConditions = async () => {
+    try {
+      const { data } = await paymentConditionService.getAll();
+      setConditions(data);
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('loadError'));
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useFocusEffect(useCallback(() => { fetchConditions(); }, []));
+
   const handleCreate = async () => {
-    if (!description) { showError(t('error'), t('fillDescription')); return; }
-    try { setSubmitting(true); await paymentConditionService.create({ description, numberOfInstallments: parseInt(installments) }); setDescription(''); setInstallments('1'); setShowForm(false); fetchConditions(); }
-    catch { showError(t('error'), t('createError')); } finally { setSubmitting(false); }
+    if (!description) { showAlert(t('error'), t('fillDescription')); return; }
+    try {
+      setSubmitting(true);
+      await paymentConditionService.create({ description, numberOfInstallments: parseInt(installments) });
+      setDescription('');
+      setInstallments('1');
+      setShowForm(false);
+      fetchConditions();
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('createError'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#4338ca" /></View>;

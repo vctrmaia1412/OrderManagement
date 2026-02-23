@@ -10,6 +10,7 @@ using OrderManagement.Infrastructure.BackgroundServices;
 using OrderManagement.Infrastructure.Data;
 using OrderManagement.Infrastructure.Queries;
 using OrderManagement.Infrastructure.Repositories;
+using OrderManagement.Infrastructure.Services;
 
 namespace OrderManagement.Infrastructure;
 
@@ -30,12 +31,20 @@ public static class DependencyInjection
         services.AddScoped<ICustomerQueryService, CustomerQueryService>();
         services.AddScoped<IPaymentConditionQueryService, PaymentConditionQueryService>();
         services.AddScoped<IOrderQueryService, OrderQueryService>();
+        services.AddScoped<IUserQueryService, UserQueryService>();
 
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<ITokenService, TokenService>();
+
+        services.AddScoped<LoginCommandHandler>();
         services.AddScoped<CreateCustomerCommandHandler>();
         services.AddScoped<CreatePaymentConditionCommandHandler>();
         services.AddScoped<CreateOrderCommandHandler>();
         services.AddScoped<ApproveOrderCommandHandler>();
         services.AddScoped<CancelOrderCommandHandler>();
+        services.AddScoped<CreateUserCommandHandler>();
+        services.AddScoped<UpdateUserCommandHandler>();
+        services.AddScoped<ChangePasswordCommandHandler>();
 
         services.AddSingleton<IOrderProcessingQueue, InMemoryOrderProcessingQueue>();
         services.AddHostedService<OrderProcessingWorker>();

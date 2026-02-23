@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { orderService } from '../services/api';
 import { useI18n } from '../context/I18nContext';
-
-const statusColors = {
-  Criado: '#e5e7eb', AguardandoAprovacao: '#fef3c7', Aprovado: '#dbeafe',
-  Processando: '#ede9fe', Pago: '#d1fae5', Cancelado: '#fee2e2',
-};
-const statusTextColors = {
-  Criado: '#374151', AguardandoAprovacao: '#92400e', Aprovado: '#1d4ed8',
-  Processando: '#6d28d9', Pago: '#065f46', Cancelado: '#991b1b',
-};
+import { statusColors, statusTextColors, formatCurrency, showAlert, showConfirm } from '../utils/helpers';
 
 export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
@@ -19,24 +11,32 @@ export default function OrdersScreen({ navigation }) {
   const { t, statusLabel } = useI18n();
 
   const fetchOrders = async () => {
-    try { const { data } = await orderService.getAll(); setOrders(data); } catch {} finally { setLoading(false); }
+    try {
+      const { data } = await orderService.getAll();
+      setOrders(data);
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('loadError'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchOrders(); }, []);
 
   const handleApprove = async (e, orderId) => {
     if (e?.stopPropagation) e.stopPropagation();
-    if (Platform.OS === 'web' && !window.confirm(`${t('confirmApprove')} #${orderId}?`)) return;
+    const confirmed = await showConfirm(`${t('confirmApprove')} #${orderId}?`, { cancelLabel: t('cancel'), confirmLabel: t('confirm') });
+    if (!confirmed) return;
     try {
       setApproving(orderId);
       await orderService.approve(orderId);
       await fetchOrders();
-    } catch {
-      if (Platform.OS === 'web') window.alert(t('approveError'));
-    } finally { setApproving(null); }
+    } catch (err) {
+      showAlert(t('error'), err.response?.data?.message || t('approveError'));
+    } finally {
+      setApproving(null);
+    }
   };
-
-  const fmt = (v) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
   const renderItem = ({ item }) => (
     <Pressable style={styles.card} onPress={() => navigation.navigate('OrderDetail', { orderId: item.orderId })}>
@@ -51,9 +51,13 @@ export default function OrdersScreen({ navigation }) {
       <Text style={styles.customer}>{item.customerName}</Text>
       <Text style={styles.condition}>{item.paymentConditionDescription} • {t('by')} {item.createdBy}</Text>
       <View style={styles.cardFooter}>
-        <Text style={styles.total}>{fmt(item.totalAmount)}</Text>
+        <Text style={styles.total}>{formatCurrency(item.totalAmount)}</Text>
         {item.requiresManualApproval && item.status === 'Criado' ? (
-          <Pressable style={[styles.approveBtn, approving === item.orderId && styles.approveBtnDisabled]} onPress={(e) => handleApprove(e, item.orderId)} disabled={approving === item.orderId}>
+          <Pressable
+            style={[styles.approveBtn, approving === item.orderId && styles.approveBtnDisabled]}
+            onPress={(e) => handleApprove(e, item.orderId)}
+            disabled={approving === item.orderId}
+          >
             <Text style={styles.approveBtnText}>{approving === item.orderId ? t('approving') : t('approveBtn')}</Text>
           </Pressable>
         ) : item.requiresManualApproval ? (
@@ -72,7 +76,13 @@ export default function OrdersScreen({ navigation }) {
           <Text style={styles.refreshText}>{t('refresh')}</Text>
         </TouchableOpacity>
       </View>
-      <FlatList data={orders} keyExtractor={(item) => String(item.orderId)} renderItem={renderItem} contentContainerStyle={styles.list}
+      <FlatList
+        data={orders}
+        keyExtractor={(item) => String(item.orderId)}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        refreshing={loading}
+        onRefresh={fetchOrders}
         ListEmptyComponent={<View style={styles.center}><Text style={styles.empty}>{t('ordersEmpty')}</Text></View>}
       />
     </View>
@@ -85,7 +95,7 @@ const styles = StyleSheet.create({
   refreshText: { fontSize: 13, color: '#374151', fontWeight: '600' },
   list: { padding: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, cursor: 'pointer' },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   orderId: { fontSize: 16, fontWeight: 'bold', color: '#1f2937' },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
@@ -95,7 +105,7 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   total: { fontSize: 18, fontWeight: 'bold', color: '#4338ca' },
   approvalTag: { fontSize: 11, color: '#b45309', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  approveBtn: { backgroundColor: '#059669', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, cursor: 'pointer' },
+  approveBtn: { backgroundColor: '#059669', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   approveBtnDisabled: { backgroundColor: '#9ca3af' },
   approveBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   empty: { fontSize: 15, color: '#9ca3af' },

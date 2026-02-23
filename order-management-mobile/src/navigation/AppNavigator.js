@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { NavigationContainer, NavigationIndependentTree } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { orderService } from '../services/api';
@@ -15,35 +15,56 @@ import PaymentConditionsScreen from '../screens/PaymentConditionsScreen';
 import ApprovalQueueScreen from '../screens/ApprovalQueueScreen';
 import UsersScreen from '../screens/UsersScreen';
 
-const Stack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
+const ContentStack = createNativeStackNavigator();
 
-const screens = {
-  Pedidos: OrdersScreen,
-  Novo: CreateOrderScreen,
-  Fila: ApprovalQueueScreen,
-  Clientes: CustomersScreen,
-  Pagamento: PaymentConditionsScreen,
-  Usuarios: UsersScreen,
+const SIDEBAR_BREAKPOINT = 768;
+
+const menuScreens = [
+  { key: 'Pedidos', icon: '📋', roles: ['Admin', 'Manager', 'User'] },
+  { key: 'Novo', icon: '➕', roles: ['Admin', 'Manager', 'User'] },
+  { key: 'Fila', icon: '⏳', roles: ['Admin', 'Manager'] },
+  { key: 'Clientes', icon: '👤', roles: ['Admin', 'Manager', 'User'] },
+  { key: 'Pagamento', icon: '💳', roles: ['Admin', 'Manager', 'User'] },
+  { key: 'Usuarios', icon: '🔐', roles: ['Admin'] },
+];
+
+const menuLabelKeys = {
+  Pedidos: 'menuMyOrders',
+  Novo: 'menuNewOrder',
+  Fila: 'menuApprovalQueue',
+  Clientes: 'menuCustomers',
+  Pagamento: 'menuPaymentConditions',
+  Usuarios: 'menuUsers',
 };
 
-function SidebarLayout({ navigation }) {
-  const { user, isAdmin, logout } = useAuth();
+function ContentNavigator() {
+  return (
+    <ContentStack.Navigator screenOptions={{ headerShown: false, animation: 'none' }}>
+      <ContentStack.Screen name="Pedidos" component={OrdersScreen} />
+      <ContentStack.Screen name="Novo" component={CreateOrderScreen} />
+      <ContentStack.Screen name="Fila" component={ApprovalQueueScreen} />
+      <ContentStack.Screen name="Clientes" component={CustomersScreen} />
+      <ContentStack.Screen name="Pagamento" component={PaymentConditionsScreen} />
+      <ContentStack.Screen name="Usuarios" component={UsersScreen} />
+      <ContentStack.Screen name="OrderDetail" component={OrderDetailScreen} />
+    </ContentStack.Navigator>
+  );
+}
+
+function SidebarLayout() {
+  const { user, logout } = useAuth();
   const { t, locale, changeLanguage, languages } = useI18n();
   const [activeScreen, setActiveScreen] = useState('Pedidos');
   const [pendingCount, setPendingCount] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  const contentNavRef = useRef(null);
+
   const role = user?.role || 'User';
-
+  const isWideScreen = width >= SIDEBAR_BREAKPOINT;
   const isAdminOrManager = role === 'Admin' || role === 'Manager';
-
-  const menuItems = [
-    { key: 'Pedidos', label: t('menuMyOrders'), icon: '📋', roles: ['Admin', 'Manager', 'User'] },
-    { key: 'Novo', label: t('menuNewOrder'), icon: '➕', roles: ['Admin', 'Manager', 'User'] },
-    { key: 'Fila', label: t('menuApprovalQueue'), icon: '⏳', roles: ['Admin', 'Manager'] },
-    { key: 'Clientes', label: t('menuCustomers'), icon: '👤', roles: ['Admin', 'Manager', 'User'] },
-    { key: 'Pagamento', label: t('menuPaymentConditions'), icon: '💳', roles: ['Admin', 'Manager', 'User'] },
-    { key: 'Usuarios', label: t('menuUsers'), icon: '🔐', roles: ['Admin'] },
-  ];
 
   useEffect(() => {
     if (!isAdminOrManager) return;
@@ -51,109 +72,134 @@ function SidebarLayout({ navigation }) {
       try {
         const { data } = await orderService.getPending();
         setPendingCount(data.length);
-      } catch {}
+      } catch { /* badge count is non-critical */ }
     };
     fetchCount();
     const interval = setInterval(fetchCount, 10000);
     return () => clearInterval(interval);
-  }, [isAdminOrManager, activeScreen]);
+  }, [isAdminOrManager]);
 
-  const visibleItems = menuItems.filter(item => item.roles.includes(role));
-  const ActiveComponent = screens[activeScreen] || OrdersScreen;
+  const visibleItems = menuScreens
+    .filter(item => item.roles.includes(role))
+    .map(item => ({ ...item, label: t(menuLabelKeys[item.key]) }));
 
-  return (
-    <View style={styles.layout}>
-      <View style={styles.sidebar}>
-        <View style={styles.sidebarHeader}>
-          <Text style={styles.appTitle}>{t('appTitle')}</Text>
-          <Text style={styles.userName}>{user?.fullName || user?.username}</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
-          </View>
-        </View>
+  const handleMenuPress = useCallback((key) => {
+    contentNavRef.current?.navigate(key);
+    setActiveScreen(key);
+    if (!isWideScreen) setDrawerOpen(false);
+  }, [isWideScreen]);
 
-        <View style={styles.menuList}>
-          {visibleItems.map(item => (
-            <TouchableOpacity
-              key={item.key}
-              style={[styles.menuItem, activeScreen === item.key && styles.menuItemActive]}
-              onPress={() => setActiveScreen(item.key)}
-            >
-              <Text style={styles.menuIcon}>{item.icon}</Text>
-              <Text style={[styles.menuLabel, activeScreen === item.key && styles.menuLabelActive]}>
-                {item.label}
-              </Text>
-              {item.key === 'Fila' && pendingCount > 0 && (
-                <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>{pendingCount}</Text></View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
+  const handleNavStateChange = useCallback((state) => {
+    if (!state) return;
+    const currentRoute = state.routes[state.index]?.name;
+    if (currentRoute && currentRoute !== 'OrderDetail') {
+      setActiveScreen(currentRoute);
+    }
+  }, []);
 
-        <View style={styles.sidebarFooter}>
-          <TouchableOpacity style={styles.settingsToggle} onPress={() => setSettingsOpen(!settingsOpen)}>
-            <Text style={styles.settingsIcon}>⚙️</Text>
-            <Text style={styles.settingsLabel}>{t('settings')}</Text>
-            <Text style={styles.settingsArrow}>{settingsOpen ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
+  const currentLabel = visibleItems.find(i => i.key === activeScreen)?.label || t('menuMyOrders');
 
-          {settingsOpen && (
-            <View style={styles.settingsPanel}>
-              <View style={styles.settingsItem}>
-                <Text style={styles.settingsItemIcon}>👤</Text>
-                <View style={styles.settingsItemContent}>
-                  <Text style={styles.settingsItemLabel}>{t('profile')}</Text>
-                  <Text style={styles.settingsItemValue}>{user?.fullName || user?.username}</Text>
-                  <Text style={styles.settingsItemSub}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
-                </View>
-              </View>
-
-              <View style={styles.settingsItem}>
-                <Text style={styles.settingsItemIcon}>🌐</Text>
-                <View style={styles.settingsItemContent}>
-                  <Text style={styles.settingsItemLabel}>{t('language')}</Text>
-                  <View style={styles.langRow}>
-                    {languages.map(lang => (
-                      <TouchableOpacity
-                        key={lang.code}
-                        style={[styles.langBtn, locale === lang.code && styles.langBtnActive]}
-                        onPress={() => changeLanguage(lang.code)}
-                      >
-                        <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>
-                          {lang.short}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-                <Text style={styles.logoutIcon}>🚪</Text>
-                <Text style={styles.logoutText}>{t('logout')}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+  const renderSidebar = () => (
+    <View style={[styles.sidebar, !isWideScreen && styles.sidebarMobile]}>
+      <View style={styles.sidebarHeader}>
+        <Text style={styles.appTitle}>{t('appTitle')}</Text>
+        <Text style={styles.userName}>{user?.fullName || user?.username}</Text>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleText}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
         </View>
       </View>
 
+      <View style={styles.menuList}>
+        {visibleItems.map(item => (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.menuItem, activeScreen === item.key && styles.menuItemActive]}
+            onPress={() => handleMenuPress(item.key)}
+          >
+            <Text style={styles.menuIcon}>{item.icon}</Text>
+            <Text style={[styles.menuLabel, activeScreen === item.key && styles.menuLabelActive]}>
+              {item.label}
+            </Text>
+            {item.key === 'Fila' && pendingCount > 0 && (
+              <View style={styles.menuBadge}><Text style={styles.menuBadgeText}>{pendingCount}</Text></View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.sidebarFooter}>
+        <TouchableOpacity style={styles.settingsToggle} onPress={() => setSettingsOpen(!settingsOpen)}>
+          <Text style={styles.settingsIcon}>⚙️</Text>
+          <Text style={styles.settingsLabel}>{t('settings')}</Text>
+          <Text style={styles.settingsArrow}>{settingsOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+
+        {settingsOpen && (
+          <View style={styles.settingsPanel}>
+            <View style={styles.settingsItem}>
+              <Text style={styles.settingsItemIcon}>👤</Text>
+              <View style={styles.settingsItemContent}>
+                <Text style={styles.settingsItemLabel}>{t('profile')}</Text>
+                <Text style={styles.settingsItemValue}>{user?.fullName || user?.username}</Text>
+                <Text style={styles.settingsItemSub}>{role === 'Admin' ? t('administrator') : role === 'Manager' ? t('manager') : t('user')}</Text>
+              </View>
+            </View>
+
+            <View style={styles.settingsItem}>
+              <Text style={styles.settingsItemIcon}>🌐</Text>
+              <View style={styles.settingsItemContent}>
+                <Text style={styles.settingsItemLabel}>{t('language')}</Text>
+                <View style={styles.langRow}>
+                  {languages.map(lang => (
+                    <TouchableOpacity
+                      key={lang.code}
+                      style={[styles.langBtn, locale === lang.code && styles.langBtnActive]}
+                      onPress={() => changeLanguage(lang.code)}
+                    >
+                      <Text style={[styles.langText, locale === lang.code && styles.langTextActive]}>
+                        {lang.short}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+              <Text style={styles.logoutIcon}>🚪</Text>
+              <Text style={styles.logoutText}>{t('logout')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.layout}>
+      {!isWideScreen && drawerOpen && (
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setDrawerOpen(false)}>
+          {renderSidebar()}
+        </TouchableOpacity>
+      )}
+
+      {isWideScreen && renderSidebar()}
+
       <View style={styles.content}>
         <View style={styles.contentHeader}>
-          <Text style={styles.contentTitle}>
-            {visibleItems.find(i => i.key === activeScreen)?.label || t('menuMyOrders')}
-          </Text>
+          {!isWideScreen && (
+            <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.hamburger}>
+              <Text style={styles.hamburgerText}>☰</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.contentTitle}>{currentLabel}</Text>
         </View>
         <View style={styles.contentBody}>
-          <ActiveComponent navigation={{
-            navigate: (screen, params) => {
-              if (screen === 'OrderDetail') {
-                navigation.navigate('OrderDetail', params);
-              } else if (screens[screen]) {
-                setActiveScreen(screen);
-              }
-            },
-            goBack: () => setActiveScreen('Pedidos'),
-          }} />
+          <NavigationIndependentTree>
+            <NavigationContainer ref={contentNavRef} onStateChange={handleNavStateChange}>
+              <ContentNavigator />
+            </NavigationContainer>
+          </NavigationIndependentTree>
         </View>
       </View>
     </View>
@@ -162,22 +208,18 @@ function SidebarLayout({ navigation }) {
 
 export default function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
-  const { t } = useI18n();
 
   if (loading) return null;
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: '#4338ca' }, headerTintColor: '#fff' }}>
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {!isAuthenticated ? (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <RootStack.Screen name="Login" component={LoginScreen} />
         ) : (
-          <>
-            <Stack.Screen name="Home" component={SidebarLayout} options={{ headerShown: false }} />
-            <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: `${t('orderTitle')}` }} />
-          </>
+          <RootStack.Screen name="Home" component={SidebarLayout} />
         )}
-      </Stack.Navigator>
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }
@@ -188,11 +230,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#f3f4f6',
   },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 100,
+    flexDirection: 'row',
+  },
   sidebar: {
     width: 260,
     backgroundColor: '#1e1b4b',
     paddingTop: Platform.OS === 'web' ? 0 : 44,
     justifyContent: 'space-between',
+  },
+  sidebarMobile: {
+    width: 280,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    zIndex: 101,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
   sidebarHeader: {
     padding: 24,
@@ -274,7 +338,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 24,
-    cursor: 'pointer',
   },
   settingsIcon: {
     fontSize: 16,
@@ -377,6 +440,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#4338ca',
     paddingVertical: 16,
     paddingHorizontal: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hamburger: {
+    marginRight: 16,
+  },
+  hamburgerText: {
+    color: '#fff',
+    fontSize: 24,
   },
   contentTitle: {
     color: '#fff',

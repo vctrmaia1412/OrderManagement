@@ -34,19 +34,22 @@ public class OrderQueryService : IOrderQueryService
     public async Task<IEnumerable<OrderResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var sql = BaseSelectSql + " ORDER BY o.OrderDate DESC";
-        return await _dbConnection.QueryAsync<OrderResponse>(sql);
+        return await _dbConnection.QueryAsync<OrderResponse>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
 
     public async Task<IEnumerable<OrderResponse>> GetByUserAsync(string username, CancellationToken cancellationToken = default)
     {
         var sql = BaseSelectSql + " WHERE o.CreatedBy = @Username ORDER BY o.OrderDate DESC";
-        return await _dbConnection.QueryAsync<OrderResponse>(sql, new { Username = username });
+        return await _dbConnection.QueryAsync<OrderResponse>(
+            new CommandDefinition(sql, new { Username = username }, cancellationToken: cancellationToken));
     }
 
     public async Task<IEnumerable<OrderResponse>> GetPendingApprovalAsync(CancellationToken cancellationToken = default)
     {
         var sql = BaseSelectSql + " WHERE o.RequiresManualApproval = 1 AND o.Status = 'Criado' ORDER BY o.OrderDate DESC";
-        return await _dbConnection.QueryAsync<OrderResponse>(sql);
+        return await _dbConnection.QueryAsync<OrderResponse>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
 
     public async Task<OrderDetailResponse?> GetByIdAsync(int orderId, CancellationToken cancellationToken = default)
@@ -77,7 +80,8 @@ public class OrderQueryService : IOrderQueryService
             FROM DeliveryTerms
             WHERE OrderId = @OrderId";
 
-        using var multi = await _dbConnection.QueryMultipleAsync(sql, new { OrderId = orderId });
+        using var multi = await _dbConnection.QueryMultipleAsync(
+            new CommandDefinition(sql, new { OrderId = orderId }, cancellationToken: cancellationToken));
 
         var order = await multi.ReadFirstOrDefaultAsync<OrderDetailResponse>();
         if (order is null)

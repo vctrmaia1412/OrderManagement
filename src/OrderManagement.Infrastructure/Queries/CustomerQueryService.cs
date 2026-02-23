@@ -21,7 +21,8 @@ public class CustomerQueryService : ICustomerQueryService
             FROM Customers
             ORDER BY Name";
 
-        return await _dbConnection.QueryAsync<CustomerResponse>(sql);
+        return await _dbConnection.QueryAsync<CustomerResponse>(
+            new CommandDefinition(sql, cancellationToken: cancellationToken));
     }
 
     public async Task<CustomerResponse?> GetByIdAsync(int customerId, CancellationToken cancellationToken = default)
@@ -31,6 +32,7 @@ public class CustomerQueryService : ICustomerQueryService
             FROM Customers
             WHERE CustomerId = @CustomerId";
 
-        return await _dbConnection.QueryFirstOrDefaultAsync<CustomerResponse>(sql, new { CustomerId = customerId });
+        return await _dbConnection.QueryFirstOrDefaultAsync<CustomerResponse>(
+            new CommandDefinition(sql, new { CustomerId = customerId }, cancellationToken: cancellationToken));
     }
 }

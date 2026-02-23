@@ -32,9 +32,6 @@ export function I18nProvider({ children }) {
   const statusLabel = (status) => {
     const map = {
       Criado: t('statusCriado'),
-      AguardandoAprovacao: t('statusAguardandoAprovacao'),
-      Aprovado: t('statusAprovado'),
-      Processando: t('statusProcessando'),
       Pago: t('statusPago'),
       Cancelado: t('statusCancelado'),
     };

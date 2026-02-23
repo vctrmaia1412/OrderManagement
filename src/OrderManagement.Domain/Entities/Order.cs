@@ -47,7 +47,7 @@ public class Order
         if (DeliveryTerm is not null)
             throw new InvalidOperationException("Prazo de entrega já definido para este pedido.");
 
-        DeliveryTerm = new DeliveryTerm(deliveryDays);
+        DeliveryTerm = new DeliveryTerm(deliveryDays, OrderDate);
     }
 
     // Aprovação manual: transiciona diretamente de Criado para Pago (sem estados intermediários)
@@ -63,6 +63,9 @@ public class Order
     {
         if (Status == OrderStatus.Pago)
             throw new InvalidOperationException("Pedidos pagos não podem ser cancelados.");
+
+        if (Status == OrderStatus.Cancelado)
+            throw new InvalidOperationException("Pedido já está cancelado.");
 
         Status = OrderStatus.Cancelado;
     }

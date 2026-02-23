@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { userService } from '../services/api';
 import { useI18n } from '../context/I18nContext';
+import { showAlert, showConfirm } from '../utils/helpers';
 
 const roleBadgeColors = { Admin: '#dc2626', Manager: '#d97706', User: '#2563eb' };
 
@@ -17,11 +19,18 @@ export default function UsersScreen() {
   const [changingPwdFor, setChangingPwdFor] = useState(null);
   const { t } = useI18n();
 
-  const fetchUsers = async () => { try { const { data } = await userService.getAll(); setUsers(data); } catch {} finally { setLoading(false); } };
-  useEffect(() => { fetchUsers(); }, []);
+  const fetchUsers = async () => {
+    try {
+      const { data } = await userService.getAll();
+      setUsers(data);
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('loadError'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const showError = (msg) => { if (Platform.OS === 'web') window.alert(msg); };
-  const showSuccess = (msg) => { if (Platform.OS === 'web') window.alert(msg); };
+  useFocusEffect(useCallback(() => { fetchUsers(); }, []));
 
   const resetForm = () => {
     setForm({ username: '', password: '', fullName: '', email: '', role: 'User' });
@@ -30,41 +39,64 @@ export default function UsersScreen() {
   };
 
   const handleCreate = async () => {
-    if (!form.username || !form.password || !form.fullName || !form.email) { showError(t('fillAllFields')); return; }
+    if (!form.username || !form.password || !form.fullName || !form.email) {
+      showAlert(t('error'), t('fillAllFields'));
+      return;
+    }
     try {
       setSubmitting(true);
       await userService.create(form);
       resetForm();
       fetchUsers();
-    } catch (e) { showError(e.response?.data?.message || t('createError')); } finally { setSubmitting(false); }
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('createError'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleUpdate = async () => {
-    if (!form.fullName || !form.email) { showError(t('fillAllFields')); return; }
+    if (!form.fullName || !form.email) {
+      showAlert(t('error'), t('fillAllFields'));
+      return;
+    }
     try {
       setSubmitting(true);
       await userService.update(editingUser.userId, { fullName: form.fullName, email: form.email, role: form.role, isActive: editingUser.isActive });
       resetForm();
       fetchUsers();
-    } catch (e) { showError(e.response?.data?.message || t('createError')); } finally { setSubmitting(false); }
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('createError'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleToggleActive = async (user) => {
-    if (Platform.OS === 'web' && !window.confirm(`${user.isActive ? t('usersDeactivate') : t('usersActivate')} ${user.fullName}?`)) return;
+    const msg = `${user.isActive ? t('usersDeactivate') : t('usersActivate')} ${user.fullName}?`;
+    const confirmed = await showConfirm(msg, { cancelLabel: t('cancel'), confirmLabel: t('confirm') });
+    if (!confirmed) return;
     try {
       await userService.update(user.userId, { fullName: user.fullName, email: user.email, role: user.role, isActive: !user.isActive });
       fetchUsers();
-    } catch (e) { showError(e.response?.data?.message || t('error')); }
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('error'));
+    }
   };
 
   const handleChangePassword = async (userId) => {
-    if (!newPassword || newPassword.length < 6) { showError(t('usersPasswordMin')); return; }
+    if (!newPassword || newPassword.length < 6) {
+      showAlert(t('error'), t('usersPasswordMin'));
+      return;
+    }
     try {
       await userService.changePassword(userId, newPassword);
-      showSuccess(t('usersPasswordChanged'));
+      showAlert(t('success'), t('usersPasswordChanged'));
       setChangingPwdFor(null);
       setNewPassword('');
-    } catch (e) { showError(e.response?.data?.message || t('error')); }
+    } catch (e) {
+      showAlert(t('error'), e.response?.data?.message || t('error'));
+    }
   };
 
   const startEdit = (user) => {
@@ -175,7 +207,7 @@ const styles = StyleSheet.create({
   inactiveBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, marginLeft: 6 },
   inactiveText: { color: '#991b1b', fontSize: 10, fontWeight: '600' },
   cardActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  actionBtn: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, cursor: 'pointer' },
+  actionBtn: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   actionText: { fontSize: 12, color: '#374151' },
   pwdSection: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' },
   pwdBtn: { backgroundColor: '#4338ca', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10 },

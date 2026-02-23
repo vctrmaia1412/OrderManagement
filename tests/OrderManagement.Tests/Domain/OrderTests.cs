@@ -151,12 +151,25 @@ public class OrderTests
         Assert.Contains("não podem ser cancelados", ex.Message);
     }
 
+    [Fact]
+    public void Cancelar_pedido_ja_cancelado_deve_lancar_excecao()
+    {
+        var items = new List<OrderItem> { new OrderItem("Produto", 10, 1000m) };
+        var order = new Order(1, 1, items);
+        order.Cancel();
+
+        Assert.Equal(OrderStatus.Cancelado, order.Status);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => order.Cancel());
+        Assert.Contains("já está cancelado", ex.Message);
+    }
+
     #endregion
 
     #region Prazo de entrega
 
     [Fact]
-    public void Definir_prazo_de_entrega_deve_criar_DeliveryTerm()
+    public void Definir_prazo_de_entrega_deve_criar_DeliveryTerm_a_partir_da_OrderDate()
     {
         var items = new List<OrderItem> { new OrderItem("Produto", 1, 100m) };
         var order = new Order(1, 1, items);
@@ -165,6 +178,7 @@ public class OrderTests
 
         Assert.NotNull(order.DeliveryTerm);
         Assert.Equal(10, order.DeliveryTerm.DeliveryDays);
+        Assert.Equal(order.OrderDate.AddDays(10).Date, order.DeliveryTerm.EstimatedDeliveryDate.Date);
     }
 
     [Fact]
