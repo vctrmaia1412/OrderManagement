@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { orderService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const statusColors = {
   Criado: 'bg-gray-100 text-gray-700',
@@ -28,6 +29,8 @@ export default function OrderDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const { user } = useAuth();
+  const canApprove = user?.role === 'Admin' || user?.role === 'Manager';
 
   const fetchOrder = async () => {
     try {
@@ -141,7 +144,7 @@ export default function OrderDetail() {
       </div>
 
       <div className="flex gap-3">
-        {order.status === 'Criado' && order.requiresManualApproval && (
+        {order.status === 'Criado' && order.requiresManualApproval && canApprove && (
           <button onClick={handleApprove} disabled={actionLoading} className="px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
             {actionLoading ? 'Processando...' : 'Aprovar Pedido'}
           </button>

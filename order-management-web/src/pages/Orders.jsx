@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { orderService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const statusColors = {
   Criado: 'bg-gray-100 text-gray-700',
@@ -24,6 +25,8 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { user } = useAuth();
+  const canApprove = user?.role === 'Admin' || user?.role === 'Manager';
 
   const fetchOrders = async () => {
     try {
@@ -103,7 +106,7 @@ export default function Orders() {
                     <Link to={`/orders/${order.orderId}`} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
                       Detalhes
                     </Link>
-                    {order.requiresManualApproval && order.status === 'Criado' && (
+                    {order.requiresManualApproval && order.status === 'Criado' && canApprove && (
                       <button onClick={() => handleApprove(order.orderId)} className="ml-2 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors">
                         Aprovar
                       </button>
