@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
@@ -10,6 +10,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const { t, locale, changeLanguage, languages } = useI18n();
+  const passwordRef = useRef(null);
 
   const handleLogin = async () => {
     setError('');
@@ -32,10 +33,10 @@ export default function LoginScreen() {
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
         <Text style={styles.label}>{t('loginUser')}</Text>
-        <TextInput style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" />
+        <TextInput style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} blurOnSubmit={false} />
 
         <Text style={styles.label}>{t('loginPassword')}</Text>
-        <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••" secureTextEntry />
+        <TextInput ref={passwordRef} style={styles.input} value={password} onChangeText={setPassword} secureTextEntry returnKeyType="go" onSubmitEditing={handleLogin} />
 
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{t('loginButton')}</Text>}
