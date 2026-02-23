@@ -13,7 +13,7 @@ Sistema completo de Gerenciamento de Pedidos com backend ASP.NET Core Web API e 
 - **SQL Server 2022 Express**
 - **BCrypt.Net** (hash de senhas via `IPasswordHasher`)
 - **JWT Authentication** (Microsoft.AspNetCore.Authentication.JwtBearer via `ITokenService`)
-- **xUnit + Moq** (testes unitarios — 35 testes)
+- **xUnit + Moq** (testes unitarios — 40 testes)
 
 ### Frontend
 - **React Native** (Expo SDK 54)
@@ -39,7 +39,7 @@ OrderManagement/
 ├── order-management-mobile/              # Frontend React Native (Expo)
 ├── order-management-web/                 # Frontend React Web (alternativo)
 └── tests/
-    └── OrderManagement.Tests/            # Testes unitarios (xUnit + Moq — 35 testes)
+    └── OrderManagement.Tests/            # Testes unitarios (xUnit + Moq — 40 testes)
 ```
 
 ### Camada Domain
@@ -336,7 +336,7 @@ Frontend disponivel em: **http://localhost:8081**
 dotnet test
 ```
 
-Resultado esperado: **35 testes aprovados** (Domain: 14, Application: 21)
+Resultado esperado: **40 testes aprovados** (Domain: 15, Application: 21, Infrastructure: 4)
 
 ---
 
@@ -570,8 +570,10 @@ OrderManagement/
         │   ├── ApproveOrderCommandHandlerTests.cs
         │   ├── CancelOrderCommandHandlerTests.cs
         │   └── LoginCommandHandlerTests.cs
-        └── Domain/
-            └── OrderTests.cs
+        ├── Domain/
+        │   └── OrderTests.cs
+        └── Infrastructure/
+            └── OrderProcessingWorkerTests.cs
 ```
 
 ---
