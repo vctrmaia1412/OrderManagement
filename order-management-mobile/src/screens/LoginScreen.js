@@ -32,7 +32,7 @@ export default function LoginScreen() {
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
         <Text style={styles.label}>{t('loginUser')}</Text>
-        <TextInput style={styles.input} value={username} onChangeText={setUsername} placeholder="admin" autoCapitalize="none" />
+        <TextInput style={styles.input} value={username} onChangeText={setUsername} autoCapitalize="none" />
 
         <Text style={styles.label}>{t('loginPassword')}</Text>
         <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••" secureTextEntry />
@@ -40,8 +40,6 @@ export default function LoginScreen() {
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{t('loginButton')}</Text>}
         </TouchableOpacity>
-
-        <Text style={styles.hint}>{t('loginHint')}</Text>
 
         <View style={styles.langRow}>
           {languages.map(lang => (
@@ -66,8 +64,7 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   errorBox: { backgroundColor: '#fef2f2', padding: 10, borderRadius: 8, marginBottom: 4 },
   errorText: { color: '#dc2626', fontSize: 13 },
-  hint: { fontSize: 11, color: '#9ca3af', textAlign: 'center', marginTop: 16 },
-  langRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, gap: 6 },
+  langRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20, gap: 6 },
   langBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
   langBtnActive: { backgroundColor: '#4338ca', borderColor: '#4338ca' },
   langText: { fontSize: 12, color: '#6b7280' },

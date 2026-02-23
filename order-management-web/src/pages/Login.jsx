@@ -73,9 +73,6 @@ export default function Login() {
             {loading ? 'Autenticando...' : 'Entrar'}
           </button>
         </form>
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Credenciais: admin / admin123
-        </p>
       </div>
     </div>
   );
