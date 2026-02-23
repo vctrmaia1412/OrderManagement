@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { orderService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { statusColors, statusTextColors, formatCurrency, showAlert, showConfirm } from '../utils/helpers';
 
@@ -8,7 +9,9 @@ export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(null);
+  const { user } = useAuth();
   const { t, statusLabel } = useI18n();
+  const canApprove = user?.role === 'Admin' || user?.role === 'Manager';
 
   const fetchOrders = async () => {
     try {
@@ -52,7 +55,7 @@ export default function OrdersScreen({ navigation }) {
       <Text style={styles.condition}>{item.paymentConditionDescription} • {t('by')} {item.createdBy}</Text>
       <View style={styles.cardFooter}>
         <Text style={styles.total}>{formatCurrency(item.totalAmount)}</Text>
-        {item.requiresManualApproval && item.status === 'Criado' ? (
+        {item.requiresManualApproval && item.status === 'Criado' && canApprove ? (
           <Pressable
             style={[styles.approveBtn, approving === item.orderId && styles.approveBtnDisabled]}
             onPress={(e) => handleApprove(e, item.orderId)}
@@ -60,7 +63,7 @@ export default function OrdersScreen({ navigation }) {
           >
             <Text style={styles.approveBtnText}>{approving === item.orderId ? t('approving') : t('approveBtn')}</Text>
           </Pressable>
-        ) : item.requiresManualApproval ? (
+        ) : item.requiresManualApproval && item.status === 'Criado' ? (
           <Text style={styles.approvalTag}>{t('manualApproval')}</Text>
         ) : null}
       </View>

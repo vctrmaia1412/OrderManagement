@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { orderService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { statusColors, statusTextColors, formatCurrency, formatDate, showAlert, showConfirm } from '../utils/helpers';
 
@@ -9,7 +10,9 @@ export default function OrderDetailScreen({ route, navigation }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const { user } = useAuth();
   const { t, statusLabel } = useI18n();
+  const canApprove = user?.role === 'Admin' || user?.role === 'Manager';
 
   const fetchOrder = async () => {
     try {
@@ -94,7 +97,7 @@ export default function OrderDetailScreen({ route, navigation }) {
         ))}
       </View>
       <View style={styles.actions}>
-        {order.status === 'Criado' && order.requiresManualApproval && (
+        {order.status === 'Criado' && order.requiresManualApproval && canApprove && (
           <Pressable style={[styles.actionBtn, { backgroundColor: '#059669' }, actionLoading && styles.disabled]} onPress={handleApprove} disabled={actionLoading}>
             <Text style={styles.actionText}>{actionLoading ? t('processing') : t('approveOrder')}</Text>
           </Pressable>
