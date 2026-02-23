@@ -1,7 +1,7 @@
 export const translations = {
   'pt-BR': {
     // General
-    appTitle: 'Order Management',
+    appTitle: 'Gestão de Pedidos',
     administrator: 'Administrador',
     user: 'Usuário',
     logout: 'Sair',
